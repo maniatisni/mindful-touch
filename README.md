@@ -1,11 +1,11 @@
 # Mindful Touch
-<p align="left">
-  <img src="logo.png" width="200" title="Mindful Touch">
-</p>[![License: MIT](https://img.shields.io/badge/License-MIT-purple.svg)](https://opensource.org/licenses/MIT)[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 
 A gentle awareness tool for mindful hand movement tracking.
+<p align="center">
+  <img src="logo.png" width="150" title="Mindful Touch">
+</p>
 
-Mindful Touch helps you become more aware of unconscious face-touching habits by providing gentle, non-intrusive notifications when your hands approach your face. By increasing awareness of these automatic movements, the application supports mindfulness practices and can help reduce the spread of germs.
+Mindful Touch helps you become more aware of unconscious face-touching habits by providing gentle, non-intrusive notifications when your hands approach your face. By increasing awareness of these automatic movements, the application supports mindfulness practices and can help reduce the effects of habits like nail biting, trichotillomania, and others.
 
 ## 🌟 Features
 
