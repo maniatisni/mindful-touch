@@ -5,17 +5,21 @@ This module provides the CLI interface and main application loop that coordinate
 the detection system, notifications, and user configuration.
 """
 
+import asyncio
 import signal
 import sys
 import time
 from pathlib import Path
 from typing import Optional
+import threading
+import cv2
 
 import click
 
 from .config import get_config, get_config_manager, AppConfig
 from .detector import create_detector, DetectionEvent, HandFaceDetector
 from .notifier import create_notification_manager, NotificationManager
+from .live_feed import create_live_feed_window, LiveFeedWindow
 
 
 class MindfulTouchApp:
@@ -30,8 +34,14 @@ class MindfulTouchApp:
         self.config = config
         self.detector: Optional[HandFaceDetector] = None
         self.notifier: Optional[NotificationManager] = None
+        self.live_feed: Optional[LiveFeedWindow] = None
         self.is_running = False
         self._setup_signal_handlers()
+        
+        # Performance tracking
+        self._last_event_time = 0.0
+        self._event_count = 0
+        self._start_time = 0.0
         
         print("🌸 Mindful Touch - Gentle Awareness Tool")
         print("   Press Ctrl+C to stop gracefully")
@@ -78,59 +88,93 @@ class MindfulTouchApp:
             print(f"❌ Initialization failed: {e}")
             return False
     
-    def start_monitoring(self) -> None:
-        """Start the main monitoring loop."""
+    def start_monitoring(self, show_live_feed: bool = False) -> None:
+        """Start the main monitoring loop.
+        
+        Args:
+            show_live_feed: Whether to show live feed window
+        """
         if not self.detector or not self.notifier:
             print("❌ Components not initialized. Call initialize() first.")
             return
         
         print("🚀 Starting monitoring...")
         
-        # Start detection system
-        if not self.detector.start_detection():
+        # Start live feed if requested
+        if show_live_feed:
+            self.live_feed = create_live_feed_window()
+            self.live_feed.set_detector(self.detector)
+            self.live_feed.start()
+        
+        # Start detection system with live feed flag
+        if not self.detector.start_detection(show_live_feed=show_live_feed):
             print("❌ Failed to start detection system")
             return
         
         self.is_running = True
+        self._start_time = time.time()
         
         # Statistics tracking
         frame_count = 0
         detection_count = 0
-        start_time = time.time()
-        last_stats_time = start_time
+        missed_frames = 0
+        last_stats_time = self._start_time
+        last_frame_time = self._start_time
         
         try:
             print("👁️  Monitoring active - looking for hand-to-face movements...")
+            if show_live_feed:
+                print("📺 Live feed window is open (press 'q' in window to close)")
+                print("   Press 'r' in window to reset statistics")
             
             while self.is_running:
-                # Capture and process frame
+                current_time = time.time()
+                
+                # Get detection result (non-blocking due to async processing)
                 result = self.detector.capture_and_detect()
                 
                 if result is None:
-                    time.sleep(0.1)
+                    # No result available yet, continue without blocking
+                    time.sleep(0.001)  # Minimal sleep to prevent CPU spinning
+                    missed_frames += 1
+                    
+                    # Check if too much time has passed without detection
+                    if current_time - last_frame_time > 1.0:
+                        print(f"⚠️  No detection results for {current_time - last_frame_time:.1f}s")
+                        last_frame_time = current_time
                     continue
                 
                 frame_count += 1
+                last_frame_time = current_time
                 
                 # Handle detection events
                 if result.event:
                     detection_count += 1
+                    self._event_count += 1
+                    self._last_event_time = current_time
                     self._handle_detection_event(result.event, result)
                 
                 # Print periodic stats
-                current_time = time.time()
                 if current_time - last_stats_time >= 30:  # Every 30 seconds
-                    self._print_stats(frame_count, detection_count, current_time - start_time)
+                    self._print_stats(frame_count, detection_count, missed_frames, current_time - self._start_time)
                     last_stats_time = current_time
                 
-                # Sleep to maintain detection interval
-                sleep_time = max(0, self.config.detection.detection_interval_ms / 1000)
-                time.sleep(sleep_time)
+                # Check if live feed window was closed
+                if self.live_feed and not self.live_feed.is_running:
+                    print("📺 Live feed window closed")
+                    self.live_feed = None
+                
+                # Adaptive sleep based on processing time
+                if result.processing_time_ms < self.config.detection.detection_interval_ms:
+                    sleep_time = (self.config.detection.detection_interval_ms - result.processing_time_ms) / 1000
+                    time.sleep(max(0.001, sleep_time))
                 
         except KeyboardInterrupt:
             print("\n🛑 Monitoring stopped by user")
         except Exception as e:
             print(f"\n❌ Monitoring error: {e}")
+            import traceback
+            traceback.print_exc()
         finally:
             self.stop()
     
@@ -141,13 +185,21 @@ class MindfulTouchApp:
             event: The detection event that occurred
             result: Full detection result with details
         """
+        current_time = time.time()
+        
+        # Check for rapid repeated events (debouncing)
+        if self._last_event_time and current_time - self._last_event_time < 0.5:
+            return  # Skip if event happened too recently
+        
         if event == DetectionEvent.HAND_NEAR_FACE:
             # Main detection event - show mindful moment notification
             if self.notifier.show_mindful_moment():
                 distance = result.min_hand_face_distance_cm
                 print(f"🌸 Mindful moment triggered (distance: {distance:.1f}cm)")
             else:
-                print(f"🔇 Detection suppressed (cooldown: {self.notifier.get_cooldown_remaining():.1f}s)")
+                cooldown = self.notifier.get_cooldown_remaining()
+                if cooldown > 0:
+                    print(f"🔇 Detection suppressed (cooldown: {cooldown:.1f}s)")
         
         elif event == DetectionEvent.HAND_AWAY_FROM_FACE:
             # Optional: gentle positive reinforcement
@@ -160,26 +212,40 @@ class MindfulTouchApp:
         elif event == DetectionEvent.HAND_LOST:
             print("👋 Hand tracking lost")
     
-    def _print_stats(self, frame_count: int, detection_count: int, elapsed_time: float) -> None:
+    def _print_stats(self, frame_count: int, detection_count: int, missed_frames: int, elapsed_time: float) -> None:
         """Print monitoring statistics.
         
         Args:
             frame_count: Total frames processed
             detection_count: Total detections triggered
+            missed_frames: Number of missed frames
             elapsed_time: Time elapsed since start
         """
         fps = frame_count / elapsed_time if elapsed_time > 0 else 0
         detection_rate = detection_count / (elapsed_time / 60) if elapsed_time > 0 else 0
+        miss_rate = (missed_frames / (frame_count + missed_frames) * 100) if frame_count + missed_frames > 0 else 0
         
         print(f"📊 Stats: {frame_count} frames, {detection_count} detections, "
-              f"{fps:.1f} FPS, {detection_rate:.1f} detections/min")
+              f"{fps:.1f} FPS, {detection_rate:.1f} detections/min, "
+              f"{miss_rate:.1f}% missed")
     
     def stop(self) -> None:
         """Stop the application and cleanup resources."""
         self.is_running = False
         
+        if self.live_feed:
+            self.live_feed.stop()
+        
         if self.detector:
             self.detector.stop_detection()
+        
+        # Print final statistics
+        if self._start_time > 0:
+            total_time = time.time() - self._start_time
+            print(f"\n📊 Final Statistics:")
+            print(f"   Total runtime: {total_time:.1f}s")
+            print(f"   Total events: {self._event_count}")
+            print(f"   Event rate: {self._event_count / (total_time / 60):.1f}/min")
         
         print("✅ Mindful Touch stopped gracefully")
     
@@ -229,8 +295,10 @@ def cli(ctx, config_dir):
 @cli.command()
 @click.option('--duration', type=int, default=10, 
               help='Debug monitoring duration in seconds')
+@click.option('--live-feed', is_flag=True, 
+              help='Show live feed window during debug')
 @click.pass_context
-def debug(ctx, duration):
+def debug(ctx, duration, live_feed):
     """Debug mode - shows detailed detection information."""
     config: AppConfig = ctx.obj['config']
     
@@ -240,7 +308,12 @@ def debug(ctx, duration):
         click.echo("❌ Failed to initialize application", err=True)
         sys.exit(1)
     
-    if not app.detector.start_detection():
+    if live_feed:
+        app.live_feed = create_live_feed_window()
+        app.live_feed.set_detector(app.detector)
+        app.live_feed.start()
+    
+    if not app.detector.start_detection(show_live_feed=live_feed):
         click.echo("❌ Failed to start detection system", err=True)
         return
     
@@ -263,11 +336,14 @@ def debug(ctx, duration):
                     click.echo(f"   {elapsed:4.1f}s: Face={result.face_detected}, "
                               f"Hands={result.hands_detected}, "
                               f"Dist={dist_str}cm, "
-                              f"Conf={result.confidence:.2f}")
+                              f"Conf={result.confidence:.2f}, "
+                              f"Process={result.processing_time_ms:.1f}ms")
             
-            time.sleep(0.1)
+            time.sleep(0.033)  # ~30fps
     
     finally:
+        if app.live_feed:
+            app.live_feed.stop()
         app.detector.stop_detection()
     
     click.echo(f"✅ Debug complete - processed {frame_count} frames")
@@ -280,8 +356,12 @@ def debug(ctx, duration):
               help='Distance threshold in centimeters')
 @click.option('--no-notifications', is_flag=True, 
               help='Disable notifications (monitoring only)')
+@click.option('--live-feed', is_flag=True, 
+              help='Show live camera feed with detection status')
+@click.option('--camera-id', type=int, 
+              help='Camera device ID to use (default: 0)')
 @click.pass_context
-def start(ctx, sensitivity, threshold, no_notifications):
+def start(ctx, sensitivity, threshold, no_notifications, live_feed, camera_id):
     """Start monitoring for hand-to-face movements."""
     config: AppConfig = ctx.obj['config']
     
@@ -298,6 +378,13 @@ def start(ctx, sensitivity, threshold, no_notifications):
         config.notifications.enabled = False
         click.echo(f"🔇 Notifications disabled")
     
+    if camera_id is not None:
+        config.camera.device_id = camera_id
+        click.echo(f"📷 Using camera ID: {camera_id}")
+    
+    if live_feed:
+        click.echo(f"📺 Live feed window enabled")
+    
     # Create and run application
     app = MindfulTouchApp(config)
     
@@ -305,14 +392,16 @@ def start(ctx, sensitivity, threshold, no_notifications):
         click.echo("❌ Failed to initialize application", err=True)
         sys.exit(1)
     
-    app.start_monitoring()
+    app.start_monitoring(show_live_feed=live_feed)
 
 
 @cli.command()
 @click.option('--duration', type=int, default=10, 
               help='Calibration duration in seconds')
+@click.option('--live-feed', is_flag=True, 
+              help='Show live feed during calibration')
 @click.pass_context
-def calibrate(ctx, duration):
+def calibrate(ctx, duration, live_feed):
     """Calibrate the detector for your setup."""
     config: AppConfig = ctx.obj['config']
     
@@ -326,7 +415,17 @@ def calibrate(ctx, duration):
     click.echo("   Please sit comfortably and look at the camera")
     click.echo("   Keep your hands in natural positions")
     
-    results = app.calibrate(duration)
+    if live_feed:
+        app.live_feed = create_live_feed_window()
+        app.live_feed.set_detector(app.detector)
+        app.live_feed.start()
+        click.echo("📺 Live feed window opened for calibration")
+    
+    try:
+        results = app.calibrate(duration)
+    finally:
+        if app.live_feed:
+            app.live_feed.stop()
     
     if 'error' in results:
         click.echo(f"❌ Calibration failed: {results['error']}", err=True)
@@ -357,8 +456,8 @@ def calibrate(ctx, duration):
 
 @cli.command()
 @click.pass_context
-def test(ctx):
-    """Test the notification system."""
+def test(ctx, camera_id):
+    """Test the notification system and camera."""
     config: AppConfig = ctx.obj['config']
     
     click.echo("🔔 Testing notification system...")
@@ -371,6 +470,137 @@ def test(ctx):
     else:
         click.echo("❌ Notification system is not working", err=True)
         click.echo("   Check your system's notification settings")
+    
+    click.echo("\n📷 Testing camera...")
+    
+    # Override camera ID if specified
+    if camera_id is not None:
+        config.camera.device_id = camera_id
+        click.echo(f"   Testing camera ID: {camera_id}")
+    
+    detector = create_detector(config.detection, config.camera)
+    
+    if detector.initialize_camera():
+        click.echo(f"✅ Camera {config.camera.device_id} is working!")
+        
+        # Capture and show a test frame
+        ret, frame = detector.cap.read()
+        if ret:
+            height, width = frame.shape[:2]
+            click.echo(f"   Resolution: {width}x{height}")
+        
+        detector.cap.release()
+    else:
+        click.echo(f"❌ Camera {config.camera.device_id} is not working", err=True)
+        click.echo("   Try running 'mindful-touch list-cameras' to see available cameras")
+
+
+@cli.command()
+@click.option('--show-preview', is_flag=True, help='Show preview window for each camera')
+@click.pass_context
+def list_cameras(ctx, show_preview):
+    """List all available cameras on the system."""
+    click.echo("🔍 Searching for available cameras...")
+    
+    available_cameras = []
+    
+    # Test camera IDs from 0 to 10 (usually sufficient)
+    for i in range(10):
+        cap = cv2.VideoCapture(i)
+        if cap.isOpened():
+            width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            fps = int(cap.get(cv2.CAP_PROP_FPS))
+            
+            available_cameras.append({
+                'id': i,
+                'width': width,
+                'height': height,
+                'fps': fps
+            })
+            
+            click.echo(f"\n📷 Camera {i}:")
+            click.echo(f"   Resolution: {width}x{height}")
+            click.echo(f"   FPS: {fps}")
+            
+            if show_preview:
+                click.echo("   Press any key to continue to next camera...")
+                ret, frame = cap.read()
+                if ret:
+                    # Add text to frame
+                    cv2.putText(
+                        frame,
+                        f"Camera {i} - {width}x{height} @ {fps}fps",
+                        (20, 40),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        1.0,
+                        (0, 255, 0),
+                        2
+                    )
+                    cv2.putText(
+                        frame,
+                        "Press any key for next camera",
+                        (20, height - 20),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.8,
+                        (255, 255, 255),
+                        2
+                    )
+                    
+                    cv2.imshow(f"Camera {i} Preview", frame)
+                    cv2.waitKey(0)
+                    cv2.destroyAllWindows()
+            
+            cap.release()
+    
+    if not available_cameras:
+        click.echo("❌ No cameras found!")
+        click.echo("   Please check your camera connections and permissions")
+    else:
+        click.echo(f"\n✅ Found {len(available_cameras)} camera(s)")
+        
+        # Suggest command to use specific camera
+        if len(available_cameras) > 1:
+            click.echo("\n💡 To use a specific camera, update your config:")
+            click.echo("   mindful-touch config --camera-id <ID>")
+            click.echo("   Or use directly:")
+            click.echo("   mindful-touch start --camera-id <ID> --live-feed")
+    """Test the notification system and camera."""
+    config: AppConfig = ctx.obj['config']
+    
+    click.echo("🔔 Testing notification system...")
+    
+    notifier = create_notification_manager(config.notifications)
+    
+    if notifier.test_notification():
+        click.echo("✅ Notification system is working!")
+        click.echo(f"   Using: {notifier.provider_name}")
+    else:
+        click.echo("❌ Notification system is not working", err=True)
+        click.echo("   Check your system's notification settings")
+    
+    click.echo("\n📷 Testing camera...")
+    
+    # Override camera ID if specified
+    if camera_id is not None:
+        config.camera.device_id = camera_id
+        click.echo(f"   Testing camera ID: {camera_id}")
+    
+    detector = create_detector(config.detection, config.camera)
+    
+    if detector.initialize_camera():
+        click.echo(f"✅ Camera {config.camera.device_id} is working!")
+        
+        # Capture and show a test frame
+        ret, frame = detector.cap.read()
+        if ret:
+            height, width = frame.shape[:2]
+            click.echo(f"   Resolution: {width}x{height}")
+        
+        detector.cap.release()
+    else:
+        click.echo(f"❌ Camera {config.camera.device_id} is not working", err=True)
+        click.echo("   Try running 'mindful-touch list-cameras' to see available cameras")
 
 
 @cli.command()
@@ -379,8 +609,9 @@ def test(ctx):
 @click.option('--cooldown', type=click.IntRange(5, 300))
 @click.option('--message', type=str)
 @click.option('--enable-notifications/--disable-notifications', default=None)
+@click.option('--camera-id', type=int, help='Camera device ID (0-9)')
 @click.pass_context
-def config(ctx, sensitivity, threshold, cooldown, message, enable_notifications):
+def config(ctx, sensitivity, threshold, cooldown, message, enable_notifications, camera_id):
     """View or update configuration settings."""
     config_manager = ctx.obj['config_manager']
     current_config = ctx.obj['config']
@@ -403,6 +634,9 @@ def config(ctx, sensitivity, threshold, cooldown, message, enable_notifications)
     if enable_notifications is not None:
         updates.setdefault('notifications', {})['enabled'] = enable_notifications
     
+    if camera_id is not None:
+        updates.setdefault('camera', {})['device_id'] = camera_id
+    
     # Apply updates
     if updates:
         try:
@@ -419,6 +653,7 @@ def config(ctx, sensitivity, threshold, cooldown, message, enable_notifications)
     click.echo(f"   Notifications: {'enabled' if current_config.notifications.enabled else 'disabled'}")
     click.echo(f"   Cooldown: {current_config.notifications.cooldown_seconds}s")
     click.echo(f"   Message: '{current_config.notifications.message}'")
+    click.echo(f"   Camera ID: {current_config.camera.device_id}")
 
 
 @cli.command()
@@ -466,6 +701,68 @@ def info(ctx):
     click.echo(f"   Log detections: {config.privacy.log_detections}")
 
 
+@cli.command()
+@click.option('--duration', type=int, default=30, 
+              help='Performance test duration in seconds')
+@click.pass_context
+def performance(ctx, duration):
+    """Run a performance test to check system responsiveness."""
+    config: AppConfig = ctx.obj['config']
+    
+    app = MindfulTouchApp(config)
+    
+    if not app.initialize():
+        click.echo("❌ Failed to initialize application", err=True)
+        sys.exit(1)
+    
+    click.echo(f"⚡ Running performance test for {duration} seconds...")
+    
+    if not app.detector.start_detection():
+        click.echo("❌ Failed to start detection system", err=True)
+        return
+    
+    start_time = time.time()
+    frame_count = 0
+    total_processing_time = 0
+    max_processing_time = 0
+    min_processing_time = float('inf')
+    
+    try:
+        while time.time() - start_time < duration:
+            result = app.detector.capture_and_detect()
+            if result:
+                frame_count += 1
+                total_processing_time += result.processing_time_ms
+                max_processing_time = max(max_processing_time, result.processing_time_ms)
+                min_processing_time = min(min_processing_time, result.processing_time_ms)
+            
+            time.sleep(0.001)  # Minimal sleep
+    
+    finally:
+        app.detector.stop_detection()
+    
+    elapsed_time = time.time() - start_time
+    
+    if frame_count > 0:
+        avg_processing_time = total_processing_time / frame_count
+        actual_fps = frame_count / elapsed_time
+        
+        click.echo("\n📊 Performance Test Results:")
+        click.echo(f"   Duration: {elapsed_time:.1f}s")
+        click.echo(f"   Frames processed: {frame_count}")
+        click.echo(f"   Actual FPS: {actual_fps:.1f}")
+        click.echo(f"   Processing time - Avg: {avg_processing_time:.1f}ms, "
+                  f"Min: {min_processing_time:.1f}ms, Max: {max_processing_time:.1f}ms")
+        
+        if avg_processing_time > 50:
+            click.echo("⚠️  Performance warning: Processing time is high")
+            click.echo("   Consider reducing camera resolution or FPS")
+        else:
+            click.echo("✅ Performance is good!")
+    else:
+        click.echo("❌ No frames were processed")
+
+
 def main():
     """Main entry point for the application."""
     try:
@@ -480,3 +777,7 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+
+# Export main for entry point
+__all__ = ['main', 'cli', 'MindfulTouchApp']
