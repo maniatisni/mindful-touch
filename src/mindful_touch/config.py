@@ -15,6 +15,7 @@ class DetectionConfig(BaseModel):
     hand_face_threshold_cm: float = Field(default=15.0, ge=2.0, le=50.0)
     detection_interval_ms: int = Field(default=100, ge=50, le=1000)
     confidence_threshold: float = Field(default=0.6, ge=0.3, le=0.95)
+    pinching_threshold_cm: float = Field(default=1.0, ge=0.5, le=10.0)
 
 
 class NotificationConfig(BaseModel):

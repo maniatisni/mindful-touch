@@ -15,7 +15,7 @@ from .notifier import NotificationManager
 class MindfulTouchApp:
     """Main application coordinating detection and notifications."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.config = get_config()
         self.detector = HandFaceDetector(self.config.detection, self.config.camera)
         self.notifier = NotificationManager(self.config.notifications)
@@ -24,7 +24,7 @@ class MindfulTouchApp:
         signal.signal(signal.SIGINT, lambda s, f: self.stop())
         signal.signal(signal.SIGTERM, lambda s, f: self.stop())
 
-    def run(self, show_live_feed: bool = False):
+    def run(self, show_live_feed: bool = False) -> None:
         """Run the main monitoring loop."""
         if not self.detector.initialize_camera():
             print("❌ Failed to initialize camera")
@@ -75,7 +75,7 @@ class MindfulTouchApp:
         finally:
             self.stop()
 
-    def stop(self):
+    def stop(self) -> None:
         """Stop application and cleanup."""
         self.is_running = False
         self.detector.cleanup()
@@ -84,7 +84,7 @@ class MindfulTouchApp:
 
 
 @click.group()
-def cli():
+def cli() -> None:
     """Mindful Touch - Hand movement awareness tool."""
     pass
 
@@ -93,7 +93,7 @@ def cli():
 @click.option("--live-feed", is_flag=True, help="Show live camera feed")
 @click.option("--sensitivity", type=click.FloatRange(0.1, 1.0), help="Detection sensitivity")
 @click.option("--threshold", type=click.FloatRange(5.0, 50.0), help="Distance threshold (cm)")
-def start(live_feed, sensitivity, threshold):
+def start(live_feed: bool, sensitivity: float, threshold: float) -> None:
     """Start monitoring."""
     app = MindfulTouchApp()
 
@@ -108,7 +108,7 @@ def start(live_feed, sensitivity, threshold):
 
 @cli.command()
 @click.option("--duration", type=int, default=10, help="Calibration duration (seconds)")
-def calibrate(duration):
+def calibrate(duration: int) -> None:
     """Calibrate detection thresholds."""
     config = get_config()
     detector = HandFaceDetector(config.detection, config.camera)
@@ -134,7 +134,7 @@ def calibrate(duration):
 
 
 @cli.command()
-def test():
+def test() -> None:
     """Test camera and notifications."""
     config = get_config()
 
@@ -161,7 +161,8 @@ def test():
 @click.option("--threshold", type=click.FloatRange(2.0, 50.0))
 @click.option("--cooldown", type=click.IntRange(5, 300))
 @click.option("--camera-id", type=int)
-def config(sensitivity, threshold, cooldown, camera_id):
+@click.option("--pinching-threshold", type=click.FloatRange(0.5, 10.0))
+def config(sensitivity: float, threshold: float, pinching_threshold: float, cooldown: int, camera_id: int) -> None:
     """View or update configuration."""
     manager = get_config_manager()
     current = get_config()
@@ -175,6 +176,8 @@ def config(sensitivity, threshold, cooldown, camera_id):
         updates.setdefault("notifications", {})["cooldown_seconds"] = cooldown
     if camera_id is not None:
         updates.setdefault("camera", {})["device_id"] = camera_id
+    if pinching_threshold:
+        updates.setdefault("detection", {})["pinching_threshold_cm"] = pinching_threshold
 
     if updates:
         manager.update_config(**updates)
@@ -185,10 +188,11 @@ def config(sensitivity, threshold, cooldown, camera_id):
     print(f"   Threshold: {current.detection.hand_face_threshold_cm}cm")
     print(f"   Cooldown: {current.notifications.cooldown_seconds}s")
     print(f"   Camera ID: {current.camera.device_id}")
+    print(f"   Pinching Threshold: {current.detection.pinching_threshold_cm}cm")
 
 
 @cli.command()
-def list_cameras():
+def list_cameras() -> None:
     """List available cameras."""
     print("🔍 Searching for cameras...")
 
@@ -210,7 +214,7 @@ def list_cameras():
         print(f"\n✅ Found {len(found)} camera(s)")
 
 
-def main():
+def main() -> None:
     """Entry point."""
     try:
         cli()
