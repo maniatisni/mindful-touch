@@ -11,7 +11,7 @@ authors = [
 ]
 readme = "README.md"
 license = {file = "LICENSE"}
-requires-python = ">=3.8.1"
+requires-python = ">=3.8.1, <3.13"
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: End Users/Desktop",
@@ -36,6 +36,8 @@ dependencies = [
     # Platform-specific notification dependencies will be installed conditionally
     "plyer>=2.1.0", # Cross-platform notifications
     "ruff>=0.11.11",
+    "pync>=2.0.3",
+    "pyobjus>=1.2.3",
 ]
 
 [project.optional-dependencies]
@@ -126,8 +128,8 @@ dev = [
 
 [tool.ruff]
 target-version = "py38"
-line-length = 100
-select = [
+line-length = 150
+lint.select = [
     "E",  # pycodestyle errors
     "W",  # pycodestyle warnings
     "F",  # pyflakes
@@ -136,7 +138,7 @@ select = [
     "C4", # flake8-comprehensions
     "UP", # pyupgrade
 ]
-ignore = [
+lint.ignore = [
     "E501",  # line too long
     "B008",  # do not perform function calls in argument defaults
     "C901",  # too complex
