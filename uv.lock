@@ -1872,6 +1872,8 @@ dependencies = [
     { name = "plyer" },
     { name = "pydantic", version = "2.10.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.9'" },
     { name = "pydantic", version = "2.11.5", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.9'" },
+    { name = "pync" },
+    { name = "pyobjus" },
     { name = "ruff" },
 ]
 
@@ -1914,6 +1916,8 @@ requires-dist = [
     { name = "plyer", specifier = ">=2.1.0" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=3.0.0" },
     { name = "pydantic", specifier = ">=2.0.0" },
+    { name = "pync", specifier = ">=2.0.3" },
+    { name = "pyobjus", specifier = ">=1.2.3" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0.0" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.0.0" },
     { name = "ruff", specifier = ">=0.11.11" },
@@ -3018,6 +3022,28 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/7c/2d/c3338d48ea6cc0feb8446d8e6937e1408088a72a39937982cc6111d17f84/pygments-2.19.1.tar.gz", hash = "sha256:61c16d2a8576dc0649d9f39e089b5f02bcd27fba10d8fb4dcc28173f7a45151f", size = 4968581 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/8a/0b/9fcc47d19c48b59121088dd6da2488a49d5f72dacf8262e2790a1d2c7d15/pygments-2.19.1-py3-none-any.whl", hash = "sha256:9ea1544ad55cecf4b8242fab6dd35a93bbce657034b0611ee383099054ab6d8c", size = 1225293 },
+]
+
+[[package]]
+name = "pync"
+version = "2.0.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "python-dateutil" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/71/ce/06fca51df0cceb13dbcd8168e2657ffd942184005b3bb958dd17c14e0148/pync-2.0.3.tar.gz", hash = "sha256:38b9e61735a3161f9211a5773c5f5ea698f36af4ff7f77fa03e8d1ff0caa117f", size = 374289 }
+
+[[package]]
+name = "pyobjus"
+version = "1.2.3"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/9f/10/9adaee5addd296f911971badadd741c24692ae51afc7ce87aefc78d7b7e5/pyobjus-1.2.3.tar.gz", hash = "sha256:de0b129d986b33fbdd0967aef83b1268868d91227bbc001f4a7c5d1bb8221074", size = 168226 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/49/da/cdaf37b9b87ee3c381c6f594b4a704df29d3aca783e6bbf1d176d923c1e5/pyobjus-1.2.3-cp310-cp310-macosx_10_9_universal2.whl", hash = "sha256:c67aaaa548a0f39a4463f4d09b7f70d77cf3d8795ac269e758d331da020cbd07", size = 686614 },
+    { url = "https://files.pythonhosted.org/packages/e6/41/8fae5df4eafaf598a60f0f929a1514f1e9ddddb0b2695a847d4557555131/pyobjus-1.2.3-cp311-cp311-macosx_10_9_universal2.whl", hash = "sha256:53a79b1d07c6382c5f485400fac2c19cf3cd285aeabc06a26f55815d517d9409", size = 714869 },
+    { url = "https://files.pythonhosted.org/packages/bf/a1/efb2a1492bfd75a71c63a2b8eb5c2efd25c72b9378f1e78e132051360fbf/pyobjus-1.2.3-cp312-cp312-macosx_10_9_universal2.whl", hash = "sha256:945f71953d15dfefb16987ee96ef3b8e4c89bee512cd722807f0b3cbab0cc4cf", size = 661812 },
+    { url = "https://files.pythonhosted.org/packages/64/c8/82366382b367779db5480f8d7562992b940fc67376d9dd7c38eb787cf1c3/pyobjus-1.2.3-cp38-cp38-macosx_10_9_universal2.whl", hash = "sha256:995e3c342d11b68a7f77bdbcae2c9515e7494ddc005e15831ec8eae3606357b0", size = 685702 },
+    { url = "https://files.pythonhosted.org/packages/34/0f/6950e4d54796ef206d30b9f0257924db142bc3ed7f81e8d033cf54b15190/pyobjus-1.2.3-cp39-cp39-macosx_10_9_universal2.whl", hash = "sha256:9ba78fb05f567ac3415f61093c3cc1ff45e0693c5edc40efa3c5f413e6f99776", size = 687191 },
 ]
 
 [[package]]
