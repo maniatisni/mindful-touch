@@ -12,6 +12,7 @@ import numpy as np
 from .config import DetectionConfig, NotificationConfig, get_config, get_config_manager
 from .detector import DetectionEvent, DetectionResult, HandFaceDetector
 from .notifier import NotificationManager
+from .ui.qt_gui import main_gui
 
 
 class MindfulTouchApp:
@@ -466,6 +467,12 @@ def list_cameras() -> None:
         print("❌ No cameras found")
     else:
         print(f"\n✅ Found {len(found)} camera(s)")
+
+
+@cli.command()
+def gui():
+    """Launch the GUI application."""
+    main_gui()
 
 
 def main() -> None:
