@@ -88,27 +88,8 @@ mindful-touch start --threshold 20
 mindful-touch start --live-feed
 ```
 
-#### `calibrate`: Personalize detection thresholds
-
-The calibration process helps tailor the application to your specific environment and physical characteristics.
-
-```bash
-mindful-touch calibrate [OPTIONS]
-```
 
 **Options:**
-- `--duration INT`: Duration of calibration in seconds (default 10)
-
-**How calibration works:**
-1. Sit in your normal working position
-2. Keep your hands visible and move them naturally (but avoid touching your face)
-3. The system will measure typical hand-face distances
-4. Based on these measurements, it will suggest an optimal threshold
-
-```bash
-# Calibrate for 20 seconds
-mindful-touch calibrate --duration 20
-```
 
 #### `config`: View or update configuration
 
@@ -204,12 +185,6 @@ When using the `--live-feed` option, you'll see:
 - **Red "PULLING DETECTED!"**: Hand proximity detected
 - **Distance measurement**: Current hand-face distance in centimeters
 
-### Using Calibration Effectively
-
-The best time to calibrate is:
-- When you first set up the application
-- After changing your workspace or camera position
-- If you feel the notifications are too frequent or too rare
 
 ## 🧠 Mindfulness Practices
 

@@ -141,11 +141,6 @@ class MindfulTouchGUI(QMainWindow):
         self.start_button.clicked.connect(self.toggle_session)
         main_buttons.addWidget(self.start_button)
 
-        self.calibrate_button = QPushButton("Calibrate")
-        self.calibrate_button.setMinimumHeight(40)
-        self.calibrate_button.clicked.connect(self.run_calibration)
-        main_buttons.addWidget(self.calibrate_button)
-
         button_layout.addLayout(main_buttons)
 
         # Secondary buttons
@@ -265,46 +260,6 @@ class MindfulTouchGUI(QMainWindow):
         """Handle settings changes."""
         # No need to save automatically, user can click Save Settings
         pass
-
-    def run_calibration(self):
-        """Run calibration process."""
-        self.calibrate_button.setEnabled(False)
-        self.status_widget.show_progress("Running calibration...")
-
-        def calibration_thread():
-            try:
-                detector = HandFaceDetector(self.config.detection, self.config.camera)
-                result = detector.calibrate(duration_seconds=10)
-
-                if result and "suggested_threshold" in result and "error" not in result:
-                    # Update UI in main thread
-                    QTimer.singleShot(0, lambda: self.apply_calibration_result(result))
-                else:
-                    error = result.get("error", "Unknown calibration error")
-                    QTimer.singleShot(0, lambda: self.show_calibration_error(error))
-
-            except Exception as e:
-                QTimer.singleShot(0, lambda: self.show_calibration_error(str(e)))
-            finally:
-                # Reset UI in main thread
-                QTimer.singleShot(0, self.reset_calibration_ui)
-
-        threading.Thread(target=calibration_thread, daemon=True).start()
-
-    def apply_calibration_result(self, result):
-        """Apply calibration result to UI."""
-        suggested = result["suggested_threshold"]
-        self.settings_widget.threshold_slider.setValue(int(suggested))
-        self.status_bar.showMessage(f"Calibration complete. Suggested threshold: {suggested:.1f}cm", 5000)
-
-    def show_calibration_error(self, error):
-        """Show calibration error."""
-        QMessageBox.warning(self, "Calibration Error", f"Calibration failed: {error}")
-
-    def reset_calibration_ui(self):
-        """Reset calibration UI elements."""
-        self.calibrate_button.setEnabled(True)
-        self.status_widget.hide_progress()
 
     def test_notification(self):
         """Test notification system."""
