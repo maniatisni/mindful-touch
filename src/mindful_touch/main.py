@@ -9,7 +9,7 @@ import click
 import cv2
 
 from .config import get_config, get_config_manager
-from .detector import HandFaceDetector
+from .detector import HandFaceDetector, DetectionEvent
 from .notifier import NotificationManager
 from .ui.qt_gui import main_gui
 
@@ -42,10 +42,10 @@ class MindfulTouchApp:
                     time.sleep(0.001)
                     continue
 
-                # Show notification for any hand-face proximity
-                if result.is_hand_near_face:
+                # Show notification for pulling behavior only
+                if result.event == DetectionEvent.PULLING_DETECTED:
                     if self.notifier.show_mindful_moment():
-                        print(f"🌸 Mindful moment (distance: {result.min_hand_face_distance_cm:.1f}cm)")
+                        print(f"🌸 Pulling detected (distance: {result.min_hand_face_distance_cm:.1f}cm)")
 
                 # Adaptive sleep based on detection interval
                 sleep_time = max(

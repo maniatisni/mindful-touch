@@ -3,7 +3,7 @@
 import time
 from PySide6.QtCore import QObject, Signal, QThread
 
-from ..detector import HandFaceDetector
+from ..detector import HandFaceDetector, DetectionEvent
 from ..notifier import NotificationManager
 
 
@@ -44,13 +44,13 @@ class DetectionWorker(QObject):
                     time.sleep(0.001)
                     continue
 
-                # Handle hand-face proximity detection
-                if result.is_hand_near_face:
+                # Handle pulling detection events
+                if result.event == DetectionEvent.PULLING_DETECTED:
                     self.detection_occurred.emit(result.min_hand_face_distance_cm or 0)
 
-                    # Show notification with cooldown
+                    # Show unified notification with cooldown
                     if self.notifier.show_mindful_moment():
-                        print(f"🌸 Mindful moment (distance: {result.min_hand_face_distance_cm:.1f}cm)")
+                        print(f"🌸 Pulling detected (distance: {result.min_hand_face_distance_cm:.1f}cm)")
 
                 # Adaptive sleep
                 sleep_time = max(
