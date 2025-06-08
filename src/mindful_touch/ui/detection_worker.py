@@ -20,6 +20,7 @@ class DetectionWorker(QObject):
         self.detector = None
         self.notifier = None
         self.running = False
+        self._cooldown_until = 0  # Track cooldown end time
 
     def start_detection(self):
         """Start the detection process."""
@@ -34,23 +35,37 @@ class DetectionWorker(QObject):
             self.running = True
             self.status_update.emit("Detection started")
 
+            alert_active_since = None
+
             while self.running:
                 # Update configs (in case GUI changed them)
                 self.detector.detection_config = self.config.detection
                 self.notifier.config = self.config.notifications
+
+                # Check cooldown before detection (no events counted during cooldown)
+                now = time.time()
+                if self.notifier._is_in_cooldown():
+                    alert_active_since = None  # Reset alert delay tracking
+                    time.sleep(0.1)
+                    continue
 
                 result = self.detector.capture_and_detect()
                 if not result:
                     time.sleep(0.001)
                     continue
 
-                # Handle pulling detection events
+                # Alert delay logic: require pulling to be detected for alert_delay seconds
+                alert_delay = getattr(self.config.detection, "alert_delay_seconds", 0.5)
                 if result.event == DetectionEvent.PULLING_DETECTED:
-                    self.detection_occurred.emit(result.min_hand_face_distance_cm or 0)
-
-                    # Show unified notification with cooldown
-                    if self.notifier.show_mindful_moment():
-                        print(f"🌸 Pulling detected (distance: {result.min_hand_face_distance_cm:.1f}cm)")
+                    if alert_active_since is None:
+                        alert_active_since = now
+                    elif now - alert_active_since >= alert_delay:
+                        self.detection_occurred.emit(result.min_hand_face_distance_cm or 0)
+                        if self.notifier.show_mindful_moment():
+                            print(f"🌸 Pulling detected (distance: {result.min_hand_face_distance_cm:.1f}cm)")
+                        alert_active_since = None  # Reset after event
+                else:
+                    alert_active_since = None
 
                 # Adaptive sleep
                 sleep_time = max(
