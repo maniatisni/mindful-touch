@@ -41,7 +41,7 @@ class DetectionResult:
 
 
 class HandFaceDetector:
-    """Trichotillomania-specific pulling detection."""
+    """Trichotillomania-specific pulling detection based on hand-to-face proximity."""
 
     # Use forehead landmarks to avoid nose-touch false positives
     FACE_CENTER_LANDMARKS = [10, 9, 151]  # Forehead center points
@@ -237,47 +237,47 @@ class HandFaceDetector:
             min_pixel_distance = min(face_center.distance_to(tip) for tip in all_hand_tips)
             min_distance_cm = self._pixels_to_cm(min_pixel_distance, face_center)
 
-        # Trichotillomania-specific pinch/pull detection
-        if face_results.multi_face_landmarks and hand_results.multi_hand_landmarks and face_center:
-            fl = face_results.multi_face_landmarks[0]
+        # Distance-based detection (removed pinch detection)
+        if (
+            face_results.multi_face_landmarks
+            and hand_results.multi_hand_landmarks
+            and face_center
+            and min_distance_cm is not None
+        ):
+            # First check if any hand is close enough to face to warrant region-specific checks
+            # This acts as a global distance threshold
+            if min_distance_cm <= self.detection_config.hand_face_threshold_cm:
+                fl = face_results.multi_face_landmarks[0]
 
-            # Define detection regions
-            eyebrow_center = self._get_landmark_region_center(fl, self.EYEBROW_LANDMARKS, width, height)
-            hair_center = self._get_hair_region_center(fl, width, height)
-            left_temple = self._get_landmark_region_center(fl, self.LEFT_TEMPLE_LANDMARKS, width, height)
-            right_temple = self._get_landmark_region_center(fl, self.RIGHT_TEMPLE_LANDMARKS, width, height)
+                # Define detection regions
+                eyebrow_center = self._get_landmark_region_center(fl, self.EYEBROW_LANDMARKS, width, height)
+                hair_center = self._get_hair_region_center(fl, width, height)
+                left_temple = self._get_landmark_region_center(fl, self.LEFT_TEMPLE_LANDMARKS, width, height)
+                right_temple = self._get_landmark_region_center(fl, self.RIGHT_TEMPLE_LANDMARKS, width, height)
 
-            # Calculate thresholds based on sensitivity
-            base_threshold = self.detection_config.hand_face_threshold_cm * (2.0 - self.detection_config.sensitivity)
-            eyebrow_threshold = base_threshold * 0.8  # Closer for eyebrows
-            scalp_threshold = base_threshold * 1.2  # Further for scalp/hair
-            temple_threshold = base_threshold  # Normal for temples
+                # Calculate region-specific thresholds based on sensitivity
+                base_threshold = self.detection_config.hand_face_threshold_cm * (
+                    2.0 - self.detection_config.sensitivity
+                )
+                eyebrow_threshold = min(
+                    base_threshold * 0.8, self.detection_config.hand_face_threshold_cm
+                )  # Closer for eyebrows
+                scalp_threshold = min(
+                    base_threshold * 1.2, self.detection_config.hand_face_threshold_cm
+                )  # Further for scalp/hair
+                temple_threshold = min(
+                    base_threshold, self.detection_config.hand_face_threshold_cm
+                )  # Normal for temples
 
-            # Check for pinching behavior in target regions
-            for hand_landmarks in hand_results.multi_hand_landmarks:
-                thumb = self._normalize_landmark(hand_landmarks.landmark[4], width, height)
-                index = self._normalize_landmark(hand_landmarks.landmark[8], width, height)
+                # Check the minimum distance to any target region
+                # If any fingertip is close enough to a region, trigger the alert
+                for finger_tip in all_hand_tips:
+                    eyebrow_dist_cm = self._pixels_to_cm(eyebrow_center.distance_to(finger_tip), face_center)
+                    hair_dist_cm = self._pixels_to_cm(hair_center.distance_to(finger_tip), face_center)
+                    left_temple_dist_cm = self._pixels_to_cm(left_temple.distance_to(finger_tip), face_center)
+                    right_temple_dist_cm = self._pixels_to_cm(right_temple.distance_to(finger_tip), face_center)
 
-                # Calculate pinch distance
-                pinch_dist_px = thumb.distance_to(index)
-                pinch_dist_cm = self._pixels_to_cm(pinch_dist_px, face_center)
-
-                # Only consider tight pinches (indicating pulling behavior)
-                pinch_threshold = 2.5  # cm - tight pinch
-                if pinch_dist_cm <= pinch_threshold:
-                    pinch_mid = Point3D(
-                        x=(thumb.x + index.x) / 2,
-                        y=(thumb.y + index.y) / 2,
-                        z=(thumb.z + index.z) / 2,
-                    )
-
-                    # Check distances to target regions
-                    eyebrow_dist_cm = self._pixels_to_cm(eyebrow_center.distance_to(pinch_mid), face_center)
-                    hair_dist_cm = self._pixels_to_cm(hair_center.distance_to(pinch_mid), face_center)
-                    left_temple_dist_cm = self._pixels_to_cm(left_temple.distance_to(pinch_mid), face_center)
-                    right_temple_dist_cm = self._pixels_to_cm(right_temple.distance_to(pinch_mid), face_center)
-
-                    # Detect pulling in any target region
+                    # Detect proximity to any target region
                     if (
                         eyebrow_dist_cm <= eyebrow_threshold
                         or hair_dist_cm <= scalp_threshold

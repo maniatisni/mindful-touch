@@ -62,7 +62,9 @@ class DetectionWorker(QObject):
                     elif now - alert_active_since >= alert_delay:
                         self.detection_occurred.emit(result.min_hand_face_distance_cm or 0)
                         if self.notifier.show_mindful_moment():
-                            print(f"🌸 Pulling detected (distance: {result.min_hand_face_distance_cm:.1f}cm)")
+                            print(
+                                f"🌸 Pulling detected (distance: {result.min_hand_face_distance_cm:.1f}cm, threshold: {self.config.detection.hand_face_threshold_cm:.1f}cm)"
+                            )
                         alert_active_since = None  # Reset after event
                 else:
                     alert_active_since = None
