@@ -21,16 +21,23 @@ class NotificationManager:
     def _detect_notification_method(self) -> Optional[str]:
         """Detect the best available notification method."""
         if self.system == "Darwin":  # macOS
+            # Try osascript first (most reliable on macOS)
+            try:
+                subprocess.run(["osascript", "-e", ""], capture_output=True, timeout=1)
+                return "osascript"
+            except Exception:
+                pass
+
+            # Try pync as fallback (but handle it better)
             try:
                 import pync
 
+                # Test if pync actually works
+                pync.notify("Test", title="Test", timeout=0.1)
                 return "pync"
-            except ImportError:
-                try:
-                    subprocess.run(["osascript", "-e", ""], capture_output=True, timeout=1)
-                    return "osascript"
-                except Exception:
-                    pass
+            except Exception:
+                # pync often fails in packaged apps, continue to fallback
+                pass
 
         elif self.system == "Linux":
             try:
@@ -47,13 +54,13 @@ class NotificationManager:
             except ImportError:
                 pass
 
-        # Fallback
+        # Universal fallback
         try:
             from plyer import notification
 
             return "plyer"
         except ImportError:
-            return None
+            return "console"  # Always fallback to console
 
     def _is_in_cooldown(self) -> bool:
         """Check if in cooldown period."""
@@ -63,43 +70,56 @@ class NotificationManager:
 
     def _send_notification(self, title: str, message: str) -> bool:
         """Send notification using the detected method."""
-        if not self._working_method:
-            print(f"🔔 {title}: {message}")
-            return True
-
         try:
-            if self._working_method == "pync":
-                import pync
-
-                pync.notify(message, title=title, timeout=self.config.duration_seconds)
-
-            elif self._working_method == "osascript":
+            if self._working_method == "osascript":
+                # Most reliable method on macOS
                 script = f'display notification "{message}" with title "{title}"'
-                subprocess.run(["osascript", "-e", script], capture_output=True, timeout=5)
+                result = subprocess.run(["osascript", "-e", script], capture_output=True, timeout=5, text=True)
+                return result.returncode == 0
+
+            elif self._working_method == "pync":
+                try:
+                    import pync
+
+                    pync.notify(message, title=title, timeout=self.config.duration_seconds)
+                    return True
+                except Exception:
+                    # If pync fails, fall back to osascript
+                    script = f'display notification "{message}" with title "{title}"'
+                    result = subprocess.run(["osascript", "-e", script], capture_output=True, timeout=5)
+                    return result.returncode == 0
 
             elif self._working_method == "notify-send":
-                subprocess.run(
+                result = subprocess.run(
                     ["notify-send", "--expire-time", str(self.config.duration_seconds * 1000), title, message],
                     capture_output=True,
                     timeout=5,
                 )
+                return result.returncode == 0
 
             elif self._working_method == "win10toast":
                 from win10toast import ToastNotifier
 
                 toaster = ToastNotifier()
                 toaster.show_toast(title, message, duration=self.config.duration_seconds, threaded=True)
+                return True
 
             elif self._working_method == "plyer":
                 from plyer import notification
 
                 notification.notify(title=title, message=message, timeout=self.config.duration_seconds)
+                return True
 
-            return True
+            else:  # console fallback
+                print(f"\n🔔 {title}")
+                print(f"💬 {message}")
+                return True
 
         except Exception as e:
-            print(f"Notification failed: {e}")
-            print(f"🔔 {title}: {message}")
+            # Always fall back to console if anything fails
+            print(f"\n🔔 {title}")
+            print(f"💬 {message}")
+            print(f"(Notification error: {e})")
             return True
 
     def show_mindful_moment(self) -> bool:

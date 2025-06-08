@@ -36,10 +36,9 @@ dependencies = [
     # Platform-specific notification dependencies will be installed conditionally
     "plyer>=2.1.0", # Cross-platform notifications
     "ruff>=0.11.11",
-    "pync>=2.0.3",
     "pyobjus>=1.2.3",
-    "PySide6>=6.6.0"
-
+    "PySide6>=6.6.0",
+    "nuitka>=2.7.6",
 ]
 
 [project.optional-dependencies]
