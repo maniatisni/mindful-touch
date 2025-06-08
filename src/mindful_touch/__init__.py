@@ -3,7 +3,7 @@
 __version__ = "0.1.0"
 
 from .config import AppConfig, get_config, get_config_manager
-from .detector import DetectionEvent, DetectionResult, HandFaceDetector
+from .detector import DetectionResult, HandFaceDetector
 from .main import MindfulTouchApp, main
 from .notifier import NotificationManager
 
@@ -15,6 +15,5 @@ __all__ = [
     "get_config_manager",
     "main",
     "DetectionResult",
-    "DetectionEvent",
     "AppConfig",
 ]
