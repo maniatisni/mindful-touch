@@ -75,6 +75,20 @@ class SettingsWidget(QWidget):
         self.confidence_slider.valueChanged.connect(self.update_confidence_label)
         detection_layout.addLayout(confidence_layout)
 
+        # Alert delay
+        alert_delay_layout = QHBoxLayout()
+        alert_delay_layout.addWidget(QLabel("Alert Delay (s):"))
+        self.alert_delay_slider = QSlider(Qt.Orientation.Horizontal)
+        self.alert_delay_slider.setRange(0, 50)  # 0.0 to 5.0 seconds (step 0.1)
+        self.alert_delay_slider.setTickPosition(QSlider.TickPosition.TicksBelow)
+        self.alert_delay_slider.setTickInterval(5)
+        alert_delay_layout.addWidget(self.alert_delay_slider)
+        self.alert_delay_value = QLabel("0.5")
+        self.alert_delay_value.setMinimumWidth(30)
+        alert_delay_layout.addWidget(self.alert_delay_value)
+        self.alert_delay_slider.valueChanged.connect(self.update_alert_delay_label)
+        detection_layout.addLayout(alert_delay_layout)
+
         layout.addWidget(detection_group)
 
     def create_notification_settings(self, layout):
@@ -118,6 +132,7 @@ class SettingsWidget(QWidget):
         self.sensitivity_slider.setValue(int(self.config.detection.sensitivity * 100))
         self.threshold_slider.setValue(int(self.config.detection.hand_face_threshold_cm))
         self.confidence_slider.setValue(int(self.config.detection.confidence_threshold * 100))
+        self.alert_delay_slider.setValue(int(self.config.detection.alert_delay_seconds * 10))
 
         # Notification settings
         self.notifications_enabled.setChecked(self.config.notifications.enabled)
@@ -129,6 +144,7 @@ class SettingsWidget(QWidget):
         self.update_threshold_label(self.threshold_slider.value())
         self.update_confidence_label(self.confidence_slider.value())
         self.update_cooldown_label(self.cooldown_slider.value())
+        self.update_alert_delay_label(self.alert_delay_slider.value())
 
     def update_sensitivity_label(self, value):
         """Update sensitivity label and config."""
@@ -156,7 +172,15 @@ class SettingsWidget(QWidget):
         self.config.notifications.cooldown_seconds = value
         self.settings_changed.emit()
 
+    def update_alert_delay_label(self, value):
+        """Update alert delay label and config."""
+        delay_value = value / 10.0
+        self.alert_delay_value.setText(f"{delay_value:.1f}")
+        self.config.detection.alert_delay_seconds = delay_value
+        self.settings_changed.emit()
+
     def update_config_from_ui(self):
         """Update configuration from UI values."""
         self.config.notifications.enabled = self.notifications_enabled.isChecked()
         self.config.notifications.message = self.message_input.text()
+        self.config.detection.alert_delay_seconds = self.alert_delay_slider.value() / 10.0

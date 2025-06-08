@@ -287,7 +287,6 @@ class HandFaceDetector:
                         is_pulling_detected = True
                         event = DetectionEvent.PULLING_DETECTED
                         break
-
         return DetectionResult(
             timestamp=start_time,
             face_detected=face_detected,
