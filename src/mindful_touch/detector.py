@@ -164,9 +164,7 @@ class HandFaceDetector:
             z=sum(p.z for p in pts) / len(pts),
         )
 
-    def _get_landmark_region_center(
-        self, face_landmarks: Any, indices: List[int], width: int, height: int
-    ) -> Point3D:
+    def _get_landmark_region_center(self, face_landmarks: Any, indices: List[int], width: int, height: int) -> Point3D:
         """Compute center point of a set of face landmarks."""
         pts: List[Point3D] = []
         for idx in indices:
@@ -238,12 +236,7 @@ class HandFaceDetector:
             min_distance_cm = self._pixels_to_cm(min_pixel_distance, face_center)
 
         # Distance-based detection (removed pinch detection)
-        if (
-            face_results.multi_face_landmarks
-            and hand_results.multi_hand_landmarks
-            and face_center
-            and min_distance_cm is not None
-        ):
+        if face_results.multi_face_landmarks and hand_results.multi_hand_landmarks and face_center and min_distance_cm is not None:
             # First check if any hand is close enough to face to warrant region-specific checks
             # This acts as a global distance threshold
             if min_distance_cm <= self.detection_config.hand_face_threshold_cm:
@@ -256,18 +249,10 @@ class HandFaceDetector:
                 right_temple = self._get_landmark_region_center(fl, self.RIGHT_TEMPLE_LANDMARKS, width, height)
 
                 # Calculate region-specific thresholds based on sensitivity
-                base_threshold = self.detection_config.hand_face_threshold_cm * (
-                    2.0 - self.detection_config.sensitivity
-                )
-                eyebrow_threshold = min(
-                    base_threshold * 0.8, self.detection_config.hand_face_threshold_cm
-                )  # Closer for eyebrows
-                scalp_threshold = min(
-                    base_threshold * 1.2, self.detection_config.hand_face_threshold_cm
-                )  # Further for scalp/hair
-                temple_threshold = min(
-                    base_threshold, self.detection_config.hand_face_threshold_cm
-                )  # Normal for temples
+                base_threshold = self.detection_config.hand_face_threshold_cm * (2.0 - self.detection_config.sensitivity)
+                eyebrow_threshold = min(base_threshold * 0.8, self.detection_config.hand_face_threshold_cm)  # Closer for eyebrows
+                scalp_threshold = min(base_threshold * 1.2, self.detection_config.hand_face_threshold_cm)  # Further for scalp/hair
+                temple_threshold = min(base_threshold, self.detection_config.hand_face_threshold_cm)  # Normal for temples
 
                 # Check the minimum distance to any target region
                 # If any fingertip is close enough to a region, trigger the alert
@@ -307,36 +292,6 @@ class HandFaceDetector:
             return None
 
         return self.detect_frame(frame)
-
-    def calibrate(self, duration_seconds: int = 10) -> dict:
-        """Calibrate detector by measuring baseline distances."""
-        if not self.initialize_camera():
-            return {"error": "Could not start camera"}
-
-        distances = []
-        start_time = time.time()
-
-        try:
-            while time.time() - start_time < duration_seconds:
-                result = self.capture_and_detect()
-                if result and result.min_hand_face_distance_cm is not None:
-                    distances.append(result.min_hand_face_distance_cm)
-                time.sleep(0.033)
-        except Exception as e:
-            return {"error": f"Calibration failed: {e}"}
-        finally:
-            self.cleanup()
-
-        if not distances:
-            return {"error": "No calibration data collected"}
-
-        return {
-            "samples": len(distances),
-            "min_distance": min(distances),
-            "max_distance": max(distances),
-            "avg_distance": sum(distances) / len(distances),
-            "suggested_threshold": sum(distances) / len(distances) * 0.7,
-        }
 
     def cleanup(self) -> None:
         """Release camera resources."""

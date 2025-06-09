@@ -9,7 +9,7 @@ import click
 import cv2
 
 from .config import get_config, get_config_manager
-from .detector import HandFaceDetector, DetectionEvent
+from .detector import DetectionEvent, HandFaceDetector
 from .notifier import NotificationManager
 from .ui.qt_gui import main_gui
 
@@ -86,33 +86,6 @@ def start(sensitivity: Optional[float], threshold: Optional[float]) -> None:
         app.config.detection.hand_face_threshold_cm = threshold
 
     app.run()
-
-
-@cli.command()
-@click.option("--duration", type=int, default=10, help="Calibration duration (seconds)")
-def calibrate(duration: int) -> None:
-    """Calibrate detection thresholds."""
-    config = get_config()
-    detector = HandFaceDetector(config.detection, config.camera)
-
-    print(f"🎯 Calibrating for {duration} seconds...")
-    print("   Sit normally and keep hands visible")
-
-    results = detector.calibrate(duration)
-
-    if "error" in results:
-        print(f"❌ {results['error']}")
-        return
-
-    print("\n✅ Results:")
-    print(f"   Samples: {results['samples']}")
-    print(f"   Average distance: {results['avg_distance']:.1f}cm")
-    print(f"   Suggested threshold: {results['suggested_threshold']:.1f}cm")
-
-    if click.confirm(f"\nApply threshold of {results['suggested_threshold']:.1f}cm?"):
-        manager = get_config_manager()
-        manager.update_config(detection={"hand_face_threshold_cm": results["suggested_threshold"]})
-        print("✅ Threshold updated")
 
 
 @cli.command()

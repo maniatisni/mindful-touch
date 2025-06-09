@@ -2,9 +2,11 @@
 
 import platform
 import subprocess
-import sys
 from datetime import datetime, timedelta
 from typing import Optional
+
+import pync
+from plyer import notification
 
 from .config import NotificationConfig
 
@@ -22,8 +24,6 @@ class NotificationManager:
         """Detect the best available notification method."""
         if self.system == "Darwin":  # macOS
             try:
-                import pync
-
                 return "pync"
             except ImportError:
                 try:
@@ -40,17 +40,10 @@ class NotificationManager:
                 pass
 
         elif self.system == "Windows":
-            try:
-                import win10toast
-
-                return "win10toast"
-            except ImportError:
-                pass
+            raise NotImplementedError("Windows notifications not implemented yet")
 
         # Fallback
         try:
-            from plyer import notification
-
             return "plyer"
         except ImportError:
             return None
@@ -69,8 +62,6 @@ class NotificationManager:
 
         try:
             if self._working_method == "pync":
-                import pync
-
                 pync.notify(message, title=title, timeout=self.config.duration_seconds)
 
             elif self._working_method == "osascript":
@@ -84,15 +75,7 @@ class NotificationManager:
                     timeout=5,
                 )
 
-            elif self._working_method == "win10toast":
-                from win10toast import ToastNotifier
-
-                toaster = ToastNotifier()
-                toaster.show_toast(title, message, duration=self.config.duration_seconds, threaded=True)
-
             elif self._working_method == "plyer":
-                from plyer import notification
-
                 notification.notify(title=title, message=message, timeout=self.config.duration_seconds)
 
             return True

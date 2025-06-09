@@ -1,27 +1,26 @@
 """Simplified Qt-based GUI for Mindful Touch application."""
 
 import sys
-import threading
+
+from PySide6.QtCore import Qt, QThread
+from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
     QApplication,
-    QMainWindow,
-    QVBoxLayout,
-    QHBoxLayout,
-    QWidget,
-    QPushButton,
-    QLabel,
-    QMessageBox,
     QFrame,
+    QHBoxLayout,
+    QLabel,
+    QMainWindow,
+    QMessageBox,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
 )
-from PySide6.QtCore import Qt, QThread, QTimer
-from PySide6.QtGui import QFont
 
 from ..config import ConfigManager
-from ..detector import HandFaceDetector
 from ..notifier import NotificationManager
 from .detection_worker import DetectionWorker
-from .status_widget import StatusWidget
 from .settings_widget import SettingsWidget
+from .status_widget import StatusWidget
 
 
 class MindfulTouchGUI(QMainWindow):
@@ -99,13 +98,8 @@ class MindfulTouchGUI(QMainWindow):
 
     def create_privacy_section(self, layout):
         """Create privacy section."""
-        privacy_label = QLabel(
-            "🔒 All processing happens locally on your device.\n"
-            "No camera data or personal information is sent anywhere."
-        )
-        privacy_label.setStyleSheet(
-            "color: #2980b9; padding: 10px; background-color: #ecf0f1; " "border-radius: 5px; margin: 5px;"
-        )
+        privacy_label = QLabel("🔒 All processing happens locally on your device.\nNo camera data or personal information is sent anywhere.")
+        privacy_label.setStyleSheet("color: #2980b9; padding: 10px; background-color: #ecf0f1; border-radius: 5px; margin: 5px;")
         privacy_label.setWordWrap(True)
         privacy_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(privacy_label)
