@@ -13,7 +13,7 @@
     "cooldown_seconds": 1
   },
   "camera": {
-    "device_id": 0,
+    "device_id": 2,
     "width": 640,
     "height": 480,
     "fps": 30

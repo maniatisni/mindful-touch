@@ -1,9 +1,9 @@
-"""Simplified Qt-based GUI for Mindful Touch application."""
-
 import sys
+import cv2
+import numpy as np
 
-from PySide6.QtCore import Qt, QThread
-from PySide6.QtGui import QFont
+from PySide6.QtCore import Qt, QThread, QTimer
+from PySide6.QtGui import QFont, QImage, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
     QFrame,
@@ -23,83 +23,168 @@ from .settings_widget import SettingsWidget
 from .status_widget import StatusWidget
 
 
+# // NEW: A dedicated widget to display the camera feed.
+class CameraFeedWidget(QWidget):
+    """A widget to display the live video feed from the camera."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setMinimumSize(640, 480)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+
+        self.camera_label = QLabel("Camera feed is hidden.", self)
+        self.camera_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.camera_label.setStyleSheet("background-color: black; color: white; font-size: 16px;")
+        layout.addWidget(self.camera_label)
+
+    def update_frame(self, frame: np.ndarray):
+        """Updates the label with a new frame from the detector."""
+        if frame is None:
+            return
+        try:
+            rgb_image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            h, w, ch = rgb_image.shape
+            bytes_per_line = ch * w
+            qt_image = QImage(rgb_image.data, w, h, bytes_per_line, QImage.Format.Format_RGB888)
+            pixmap = QPixmap.fromImage(qt_image)
+            scaled_pixmap = pixmap.scaled(
+                self.camera_label.size(),
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+            self.camera_label.setPixmap(scaled_pixmap)
+        except Exception as e:
+            print(e)
+
+
 class MindfulTouchGUI(QMainWindow):
     """Main GUI window for Mindful Touch."""
 
     def __init__(self):
         super().__init__()
-
-        # Load configuration
         self.config_manager = ConfigManager()
         self.config = self.config_manager.load_config()
-
-        # Initialize components
         self.detection_worker = None
         self.detection_thread = None
         self.session_active = False
-
-        # Setup UI
         self.setup_ui()
 
     def setup_ui(self):
         """Setup the main user interface."""
-        self.setWindowTitle("Mindful Touch - Trichotillomania Detection")
-        self.setGeometry(100, 100, 500, 600)
-        self.setMinimumSize(650, 800)
+        self.setWindowTitle("Mindful Touch")
+        # // MODIFIED: Start with a compact size, allow expansion.
+        self.setGeometry(100, 100, 450, 700)
+        self.setMinimumSize(450, 700)
 
-        # Central widget
+        # // MODIFIED: The central widget now uses a horizontal layout
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
-        layout = QVBoxLayout(central_widget)
-        layout.setSpacing(15)
+        main_layout = QHBoxLayout(central_widget)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
 
-        # Header
-        self.create_header(layout)
+        # // NEW: Create a left panel to hold all the original controls.
+        self.left_panel = QWidget()
+        left_panel_layout = QVBoxLayout(self.left_panel)
+        left_panel_layout.setSpacing(15)
+        left_panel_layout.setContentsMargins(15, 15, 15, 15)
+        self.left_panel.setFixedWidth(450)  # Keep the control panel a consistent size
 
-        # Status widget
+        # --- Add original widgets to the left panel ---
+        self.create_header(left_panel_layout)
         self.status_widget = StatusWidget()
-        layout.addWidget(self.status_widget)
-
-        # Settings widget
+        left_panel_layout.addWidget(self.status_widget)
         self.settings_widget = SettingsWidget(self.config)
         self.settings_widget.settings_changed.connect(self.on_settings_changed)
-        layout.addWidget(self.settings_widget)
+        left_panel_layout.addWidget(self.settings_widget)
+        self.create_privacy_section(left_panel_layout)
+        self.create_control_buttons(left_panel_layout)
+        main_layout.addWidget(self.left_panel)
 
-        # Privacy section
-        self.create_privacy_section(layout)
+        # // NEW: Create and add the camera feed widget to the main layout.
+        self.camera_feed_widget = CameraFeedWidget()
+        main_layout.addWidget(self.camera_feed_widget)
+        self.camera_feed_widget.hide()  # Hide it by default.
 
-        # Control buttons
-        self.create_control_buttons(layout)
+        # // NEW: Connect the toggle signal from the settings widget.
+        self.settings_widget.toggle_camera_feed_requested.connect(self.toggle_camera_feed)
 
-        # Status bar
         self.status_bar = self.statusBar()
         self.status_bar.showMessage("Ready - Configure settings and start session")
 
+    # // NEW: This method shows/hides the camera feed and resizes the window.
+    def toggle_camera_feed(self, show: bool):
+        if show:
+            self.camera_feed_widget.show()
+            # Use a QTimer to resize after the widget is shown to avoid glitches
+            QTimer.singleShot(0, lambda: self.resize(self.minimumSizeHint()))
+        else:
+            self.camera_feed_widget.hide()
+            # Resize back to the compact size of the left panel
+            QTimer.singleShot(0, lambda: self.resize(self.left_panel.width(), self.height()))
+
+    def start_session(self):
+        """Start detection session."""
+        try:
+            self.settings_widget.update_config_from_ui()
+            self.detection_worker = DetectionWorker(self.config)
+            self.detection_thread = QThread()
+            self.detection_worker.moveToThread(self.detection_thread)
+
+            # Connect signals
+            self.detection_worker.detection_occurred.connect(self.on_detection)
+            self.detection_worker.error_occurred.connect(self.on_detection_error)
+            self.detection_worker.status_update.connect(self.on_status_update)
+            # // NEW: Connect the new frame_ready signal from the worker
+            if hasattr(self.detection_worker, "frame_ready"):
+                self.detection_worker.frame_ready.connect(self.on_frame_ready)
+
+            self.detection_thread.started.connect(self.detection_worker.start_detection)
+            self.detection_thread.start()
+
+            self.session_active = True
+            self.status_widget.start_session()
+            self.start_button.setText("Stop Session")
+            self.start_button.setStyleSheet(
+                "background-color: #e74c3c; color: white; border: none; border-radius: 5px; padding: 8px;"
+            )
+            self.status_bar.showMessage("Session started - monitoring")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to start session: {e}")
+
+    # // NEW: A slot to receive the frame and pass it to the camera widget.
+    def on_frame_ready(self, frame: np.ndarray):
+        """Receives a frame from the worker and updates the camera feed if visible."""
+        if self.camera_feed_widget.isVisible():
+            self.camera_feed_widget.update_frame(frame)
+
+    # ... (The rest of the file remains the same, only the setup_ui and start_session methods are modified as shown)
     def create_header(self, layout):
         """Create the header section."""
         header_frame = QFrame()
         header_layout = QVBoxLayout(header_frame)
-
-        # Title
         title = QLabel("Mindful Touch")
         title.setFont(QFont("Arial", 24, QFont.Weight.Bold))
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         title.setStyleSheet("color: #2c3e50; margin: 10px;")
         header_layout.addWidget(title)
-
-        # Subtitle
         subtitle = QLabel("Mindfulness tool for trichotillomania")
         subtitle.setFont(QFont("Arial", 12))
         subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
         subtitle.setStyleSheet("color: #7f8c8d; margin-bottom: 10px;")
         header_layout.addWidget(subtitle)
-
         layout.addWidget(header_frame)
 
     def create_privacy_section(self, layout):
         """Create privacy section."""
-        privacy_label = QLabel("🔒 All processing happens locally on your device.\nNo camera data or personal information is sent anywhere.")
-        privacy_label.setStyleSheet("color: #2980b9; padding: 10px; background-color: #ecf0f1; border-radius: 5px; margin: 5px;")
+        privacy_label = QLabel(
+            "🔒 All processing happens locally on your device.\nNo camera data or personal information is sent anywhere."
+        )
+        privacy_label.setStyleSheet(
+            "color: #2980b9; padding: 10px; background-color: #ecf0f1; border-radius: 5px; margin: 5px;"
+        )
         privacy_label.setWordWrap(True)
         privacy_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(privacy_label)
@@ -108,48 +193,24 @@ class MindfulTouchGUI(QMainWindow):
         """Create control buttons section."""
         button_frame = QFrame()
         button_layout = QVBoxLayout(button_frame)
-
-        # Main action buttons
         main_buttons = QHBoxLayout()
-
         self.start_button = QPushButton("Start Session")
         self.start_button.setFont(QFont("Arial", 12, QFont.Weight.Bold))
         self.start_button.setMinimumHeight(40)
         self.start_button.setStyleSheet(
-            """
-            QPushButton {
-                background-color: #27ae60;
-                color: white;
-                border: none;
-                border-radius: 5px;
-                padding: 8px;
-            }
-            QPushButton:hover {
-                background-color: #229954;
-            }
-            QPushButton:pressed {
-                background-color: #1e8449;
-            }
-        """
+            "QPushButton { background-color: #27ae60; color: white; border: none; border-radius: 5px; padding: 8px; } QPushButton:hover { background-color: #229954; } QPushButton:pressed { background-color: #1e8449; }"
         )
         self.start_button.clicked.connect(self.toggle_session)
         main_buttons.addWidget(self.start_button)
-
         button_layout.addLayout(main_buttons)
-
-        # Secondary buttons
         secondary_buttons = QHBoxLayout()
-
         test_notification_btn = QPushButton("Test Notification")
         test_notification_btn.clicked.connect(self.test_notification)
         secondary_buttons.addWidget(test_notification_btn)
-
         save_settings_btn = QPushButton("Save Settings")
         save_settings_btn.clicked.connect(self.save_settings)
         secondary_buttons.addWidget(save_settings_btn)
-
         button_layout.addLayout(secondary_buttons)
-
         layout.addWidget(button_frame)
 
     def toggle_session(self):
@@ -159,81 +220,19 @@ class MindfulTouchGUI(QMainWindow):
         else:
             self.start_session()
 
-    def start_session(self):
-        """Start detection session."""
-        try:
-            # Update config from UI
-            self.settings_widget.update_config_from_ui()
-
-            # Initialize detection worker
-            self.detection_worker = DetectionWorker(self.config)
-            self.detection_thread = QThread()
-            self.detection_worker.moveToThread(self.detection_thread)
-
-            # Connect signals
-            self.detection_worker.detection_occurred.connect(self.on_detection)
-            self.detection_worker.error_occurred.connect(self.on_detection_error)
-            self.detection_worker.status_update.connect(self.on_status_update)
-            self.detection_thread.started.connect(self.detection_worker.start_detection)
-
-            # Start thread
-            self.detection_thread.start()
-
-            # Update UI
-            self.session_active = True
-            self.status_widget.start_session()
-
-            self.start_button.setText("Stop Session")
-            self.start_button.setStyleSheet(
-                """
-                QPushButton {
-                    background-color: #e74c3c;
-                    color: white;
-                    border: none;
-                    border-radius: 5px;
-                    padding: 8px;
-                }
-                QPushButton:hover {
-                    background-color: #c0392b;
-                }
-            """
-            )
-
-            self.status_bar.showMessage("Session started - monitoring for hand-face proximity")
-
-        except Exception as e:
-            QMessageBox.critical(self, "Error", f"Failed to start session: {e}")
-
     def stop_session(self):
         """Stop detection session."""
         self.session_active = False
-
         if self.detection_worker:
             self.detection_worker.stop_detection()
-
         if self.detection_thread and self.detection_thread.isRunning():
             self.detection_thread.quit()
-            self.detection_thread.wait(3000)  # Wait up to 3 seconds
-
-        # Update UI
+            self.detection_thread.wait(3000)
         self.status_widget.stop_session()
-
         self.start_button.setText("Start Session")
         self.start_button.setStyleSheet(
-            """
-            QPushButton {
-                background-color: #27ae60;
-                color: white;
-                border: none;
-                border-radius: 5px;
-                padding: 8px;
-            }
-            QPushButton:hover {
-                background-color: #229954;
-            }
-        """
+            "QPushButton { background-color: #27ae60; color: white; border: none; border-radius: 5px; padding: 8px; } QPushButton:hover { background-color: #229954; }"
         )
-
         self.status_bar.showMessage("Session stopped")
 
     def on_detection(self, distance: float):
@@ -252,7 +251,6 @@ class MindfulTouchGUI(QMainWindow):
 
     def on_settings_changed(self):
         """Handle settings changes."""
-        # No need to save automatically, user can click Save Settings
         pass
 
     def test_notification(self):
@@ -284,7 +282,6 @@ class MindfulTouchGUI(QMainWindow):
                 "A detection session is currently active. Do you want to stop it and exit?",
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             )
-
             if reply == QMessageBox.StandardButton.Yes:
                 self.stop_session()
                 event.accept()

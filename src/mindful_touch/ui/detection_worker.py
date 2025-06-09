@@ -14,6 +14,7 @@ class DetectionWorker(QObject):
     detection_occurred = Signal(float)  # distance
     error_occurred = Signal(str)
     status_update = Signal(str)
+    frame_ready = Signal(object)
 
     def __init__(self, config):
         super().__init__()
@@ -54,7 +55,7 @@ class DetectionWorker(QObject):
                 if not result:
                     time.sleep(0.001)
                     continue
-
+                self.frame_ready.emit(result.debug_info["frame"])
                 # Alert delay logic: require pulling to be detected for alert_delay seconds
                 alert_delay = getattr(self.config.detection, "alert_delay_seconds", 0.5)
                 if result.event == DetectionEvent.PULLING_DETECTED:
