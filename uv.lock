@@ -1919,6 +1919,7 @@ dev = [
     { name = "pytest" },
     { name = "pytest-cov", version = "5.0.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.9'" },
     { name = "pytest-cov", version = "6.1.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.9'" },
+    { name = "pytest-qt" },
 ]
 windows = [
     { name = "win10toast" },
@@ -1948,8 +1949,9 @@ requires-dist = [
     { name = "pync", specifier = ">=2.0.3" },
     { name = "pyobjus", specifier = ">=1.2.3" },
     { name = "pyside6", specifier = ">=6.6.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0.0" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.0.0" },
+    { name = "pytest-qt", marker = "extra == 'dev'", specifier = ">=4.4" },
     { name = "ruff", specifier = ">=0.11.11" },
     { name = "win10toast", marker = "extra == 'windows'", specifier = ">=0.9" },
 ]
@@ -3392,6 +3394,20 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/25/69/5f1e57f6c5a39f81411b550027bf72842c4567ff5fd572bed1edc9e4b5d9/pytest_cov-6.1.1.tar.gz", hash = "sha256:46935f7aaefba760e716c2ebfbe1c216240b9592966e7da99ea8292d4d3e2a0a", size = 66857 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/28/d0/def53b4a790cfb21483016430ed828f64830dd981ebe1089971cd10cab25/pytest_cov-6.1.1-py3-none-any.whl", hash = "sha256:bddf29ed2d0ab6f4df17b4c55b0a657287db8684af9c42ea546b21b1041b3dde", size = 23841 },
+]
+
+[[package]]
+name = "pytest-qt"
+version = "4.4.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pluggy", version = "1.5.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.9'" },
+    { name = "pluggy", version = "1.6.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.9'" },
+    { name = "pytest" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/53/2c/6a477108342bbe1f5a81a2c54c86c3efadc35f6ad47c76f00c75764a0f7c/pytest-qt-4.4.0.tar.gz", hash = "sha256:76896142a940a4285339008d6928a36d4be74afec7e634577e842c9cc5c56844", size = 125443 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/4c/51/6cc5b9c1ecdcd78e6cde97e03d05f5a4ace8f720c5ce0f26f9dce474a0da/pytest_qt-4.4.0-py3-none-any.whl", hash = "sha256:001ed2f8641764b394cf286dc8a4203e40eaf9fff75bf0bfe5103f7f8d0c591d", size = 36286 },
 ]
 
 [[package]]
