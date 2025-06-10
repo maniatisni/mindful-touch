@@ -273,22 +273,40 @@ from PyInstaller.utils.hooks import collect_data_files, collect_submodules, coll
 # Collect everything from pync
 datas, binaries, hiddenimports = collect_all('pync')
 
-# Ensure terminal-notifier binary is included
+# Ensure terminal-notifier binary is included - with improved path handling
 import os
+import sys
+import glob
 try:
     import pync
     pync_path = os.path.dirname(pync.__file__)
+    print(f"Found pync at: {pync_path}")
+    
     # Look for terminal-notifier in various possible locations
     possible_paths = [
         os.path.join(pync_path, 'vendor', 'terminal-notifier-2.0.0', 'terminal-notifier.app'),
         os.path.join(pync_path, 'vendor', 'terminal-notifier', 'terminal-notifier.app'),
         os.path.join(pync_path, 'terminal-notifier.app'),
     ]
+    
+    # Also try to find it using glob pattern
+    vendor_dir = os.path.join(pync_path, 'vendor')
+    if os.path.exists(vendor_dir):
+        glob_matches = glob.glob(os.path.join(vendor_dir, '**', 'terminal-notifier.app'), recursive=True)
+        possible_paths.extend(glob_matches)
+    
+    found = False
     for path in possible_paths:
         if os.path.exists(path):
-            # Add the entire .app bundle
-            datas.append((path, os.path.join('pync', 'vendor', os.path.basename(os.path.dirname(path)))))
+            # Add the entire .app bundle with a simplified destination path
+            dest_dir = 'pync/vendor'
+            print(f"Adding terminal-notifier from: {path} to {dest_dir}")
+            datas.append((path, dest_dir))
+            found = True
             break
+    
+    if not found:
+        print("WARNING: Could not find terminal-notifier.app bundle for pync")
 except Exception as e:
     print(f"Warning in pync hook: {e}")
 """
@@ -447,22 +465,68 @@ def post_build_fixes():
             if not os.path.exists(dest):
                 shutil.copy2(logo_file, resources_path)
 
+    # Manual fix for pync's terminal-notifier
+    print("🔧 Ensuring terminal-notifier is available...")
+    try:
+        import pync
+
+        pync_path = os.path.dirname(pync.__file__)
+
+        # Try to find terminal-notifier using glob
+        import glob
+
+        terminal_notifier_paths = glob.glob(os.path.join(pync_path, "**", "terminal-notifier.app"), recursive=True)
+
+        if terminal_notifier_paths:
+            tn_path = terminal_notifier_paths[0]
+            print(f"Found terminal-notifier at: {tn_path}")
+
+            # Create destination directory
+            dest_dir = os.path.join(resources_path, "pync", "vendor")
+            os.makedirs(dest_dir, exist_ok=True)
+
+            # Copy the terminal-notifier.app folder
+            subprocess.run(["cp", "-R", tn_path, dest_dir])
+            print(f"✅ Copied terminal-notifier to {dest_dir}")
+        else:
+            print("⚠️ Could not find terminal-notifier.app in pync package")
+    except Exception as e:
+        print(f"⚠️ Error fixing terminal-notifier: {e}")
+
     # Manual fix for pync if needed
     print("🔧 Checking pync installation...")
     pync_check_script = f"""#!/bin/bash
 # Check if pync's terminal-notifier is in the app
-find "{app_path}" -name "terminal-notifier*" -type f 2>/dev/null | head -5
+echo "Searching for terminal-notifier in app bundle..."
+find "{app_path}" -name "terminal-notifier*" -type f -o -name "*.app" 2>/dev/null | grep -i terminal
 """
 
     with open("check_pync.sh", "w") as f:
         f.write(pync_check_script)
     os.chmod("check_pync.sh", 0o755)
 
+    # Run the check script
+    print("Running terminal-notifier check...")
+    subprocess.run(["./check_pync.sh"])
+
+    # Verify app structure
+    print("🔍 Verifying app bundle structure...")
+    subprocess.run(["ls", "-la", f"{app_path}/Contents/MacOS"])
+    subprocess.run(["ls", "-la", resources_path])
+
+    # Check for main executable
+    if os.path.exists(f"{app_path}/Contents/MacOS/mindful-touch"):
+        print("✅ Main executable found")
+    else:
+        print("❌ Main executable not found!")
+
     # Create a simple test script
     test_script = f"""#!/bin/bash
 echo "Testing {APP_NAME}..."
 open "{app_path}"
 echo "Check Console.app for any error messages"
+echo "If app doesn't launch, try running:"
+echo "cd '{app_path}/Contents/MacOS' && ./mindful-touch"
 """
 
     with open("test_app.sh", "w") as f:

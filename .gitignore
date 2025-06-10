@@ -87,7 +87,6 @@ build/
 dist/
 *.dmg
 *.spec
-hook-*.py
 test_app.sh
 check_pync.sh
 entitlements.plist

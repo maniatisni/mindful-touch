@@ -23,28 +23,68 @@ jobs:
       
       - name: Set up Python
         run: uv python install 3.11
-      
-      - name: Install dependencies
-        run: |
-          uv sync
-          uv pip install pyinstaller pillow matplotlib
-          
-      - name: Install create-dmg
+        
+      - name: Install system dependencies
         run: |
           brew install create-dmg
+      
+      - name: Install Python dependencies
+        run: |
+          uv sync
+          uv pip install pyinstaller>=6.0 pillow matplotlib
+          # Force reinstall pync to ensure it's properly installed
+          uv pip uninstall -y pync || true
+          uv pip install pync
+          
+      - name: Debug environment
+        run: |
+          echo "Python version:"
+          uv run python --version
+          echo "PyInstaller version:"
+          uv run python -c "import PyInstaller; print(PyInstaller.__version__)"
+          echo "Pync location:"
+          uv run python -c "import pync; print(pync.__file__)"
+          echo "Looking for terminal-notifier:"
+          uv run python -c "import os, pync, glob; pync_dir = os.path.dirname(pync.__file__); print('Pync dir:', pync_dir); print(glob.glob(os.path.join(pync_dir, '**', '*terminal-notifier*'), recursive=True))"
       
       - name: Build macOS app
         run: |
           uv run python build_macos.py
           # List files to verify what was created
+          echo "Files in current directory:"
           ls -la
+          echo "Files in dist directory:"
           ls -la dist/
+          echo "App bundle contents:"
+          ls -la "dist/Mindful Touch.app/Contents/MacOS/" || echo "MacOS dir not found"
+          ls -la "dist/Mindful Touch.app/Contents/Resources/" || echo "Resources dir not found"
+          # Run the pync check
+          if [ -f ./check_pync.sh ]; then
+            echo "Running pync check:"
+            ./check_pync.sh
+          fi
+      
+      - name: Prepare release artifacts
+        run: |
+          # Make sure DMG file is in the root for the upload
+          if [ -f "Mindful Touch-0.1.0.dmg" ]; then
+            echo "DMG file exists in root"
+          elif [ -f "dist/Mindful Touch-0.1.0.dmg" ]; then
+            echo "Moving DMG from dist directory"
+            cp "dist/Mindful Touch-0.1.0.dmg" .
+          else
+            echo "Warning: DMG file not found"
+          fi
+          
+          # Create a zip archive of the app as backup
+          cd dist
+          zip -r "../Mindful Touch.app.zip" "Mindful Touch.app"
+          cd ..
       
       - name: Upload Release Assets
         uses: softprops/action-gh-release@v1
         with:
           files: |
             *.dmg
+            *.zip
             dist/*.app
-        env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
