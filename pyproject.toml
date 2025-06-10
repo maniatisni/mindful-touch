@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mindful-touch"
-version = "0.1.0"
+version = "0.1.1"
 description = "A gentle awareness tool for mindful hand movement tracking"
 authors = [
     {name = "Nikos Maniatis", email = "maniatisni@gmail.com"},

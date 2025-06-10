@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.1](https://github.com/maniatisni/mindful-touch/compare/v0.1.0...v0.1.1) (2025-06-10)
+
+
+### Bug Fixes
+
+* improved macOS app bundling and terminal-notifier integration ([7afaa4b](https://github.com/maniatisni/mindful-touch/commit/7afaa4b1458b3e630850f374c8c91edf51d61281))
+
 ## 0.1.0 (2025-06-10)
 
 

@@ -1,6 +1,6 @@
 """Mindful Touch - Hand movement awareness tool."""
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 from .config import AppConfig, get_config, get_config_manager
 from .detector import DetectionResult, HandFaceDetector
