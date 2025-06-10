@@ -273,17 +273,18 @@ from PyInstaller.utils.hooks import collect_data_files, collect_submodules, coll
 # Collect everything from pync
 datas, binaries, hiddenimports = collect_all('pync')
 
-# Ensure terminal-notifier binary is included    import os
-    try:
-        import pync
-        pync_path = os.path.dirname(pync.__file__)
-        # Look for terminal-notifier in various possible locations
-        possible_paths = [
-            os.path.join(pync_path, 'vendor', 'terminal-notifier-2.0.0', 'terminal-notifier.app'),
-            os.path.join(pync_path, 'vendor', 'terminal-notifier', 'terminal-notifier.app'),
-            os.path.join(pync_path, 'terminal-notifier.app'),
-        ]
-        for path in possible_paths:
+# Ensure terminal-notifier binary is included
+import os
+try:
+    import pync
+    pync_path = os.path.dirname(pync.__file__)
+    # Look for terminal-notifier in various possible locations
+    possible_paths = [
+        os.path.join(pync_path, 'vendor', 'terminal-notifier-2.0.0', 'terminal-notifier.app'),
+        os.path.join(pync_path, 'vendor', 'terminal-notifier', 'terminal-notifier.app'),
+        os.path.join(pync_path, 'terminal-notifier.app'),
+    ]
+    for path in possible_paths:
         if os.path.exists(path):
             # Add the entire .app bundle
             datas.append((path, os.path.join('pync', 'vendor', os.path.basename(os.path.dirname(path)))))
