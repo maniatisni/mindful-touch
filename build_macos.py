@@ -4,10 +4,9 @@ Build script for creating Mindful Touch macOS application using PyInstaller with
 """
 
 import os
-import sys
 import shutil
 import subprocess
-from pathlib import Path
+import sys
 
 # Build configuration
 APP_NAME = "Mindful Touch"
@@ -101,7 +100,7 @@ hiddenimports = [
     'numpy',
     'PySide6',
     'PySide6.QtCore',
-    'PySide6.QtGui', 
+    'PySide6.QtGui',
     'PySide6.QtWidgets',
     'click',
     'click.core',
@@ -214,27 +213,22 @@ def create_entitlements():
     <!-- Camera access -->
     <key>com.apple.security.device.camera</key>
     <true/>
-    
     <!-- Allow sending Apple events (for notifications via osascript) -->
     <key>com.apple.security.automation.apple-events</key>
     <true/>
-    
+
     <!-- File access for config storage -->
     <key>com.apple.security.files.user-selected.read-write</key>
     <true/>
-    
     <!-- Network client (might be needed for some dependencies) -->
     <key>com.apple.security.network.client</key>
     <true/>
-    
     <!-- Hardened runtime -->
     <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
     <true/>
-    
     <!-- Allow DYLD environment variables (needed for some Python packages) -->
     <key>com.apple.security.cs.allow-dyld-environment-variables</key>
     <true/>
-    
     <!-- Disable library validation (needed for loading Python extensions) -->
     <key>com.apple.security.cs.disable-library-validation</key>
     <true/>
@@ -256,8 +250,8 @@ def create_icon():
             try:
                 subprocess.run(["sips", "-s", "format", "icns", "logo.png", "--out", "logo.icns"], check=True)
                 print("✅ Created logo.icns")
-            except:
-                print("❌ Failed to create logo.icns. Please create it manually.")
+            except Exception as e:
+                print(f"❌ Failed to create logo.icns: {e}. Please create it manually.")
         else:
             print("   Please add your icon files (logo.png and logo.icns)")
             return False
@@ -279,20 +273,17 @@ from PyInstaller.utils.hooks import collect_data_files, collect_submodules, coll
 # Collect everything from pync
 datas, binaries, hiddenimports = collect_all('pync')
 
-# Ensure terminal-notifier binary is included
-import os
-try:
-    import pync
-    pync_path = os.path.dirname(pync.__file__)
-    
-    # Look for terminal-notifier in various possible locations
-    possible_paths = [
-        os.path.join(pync_path, 'vendor', 'terminal-notifier-2.0.0', 'terminal-notifier.app'),
-        os.path.join(pync_path, 'vendor', 'terminal-notifier', 'terminal-notifier.app'),
-        os.path.join(pync_path, 'terminal-notifier.app'),
-    ]
-    
-    for path in possible_paths:
+# Ensure terminal-notifier binary is included    import os
+    try:
+        import pync
+        pync_path = os.path.dirname(pync.__file__)
+        # Look for terminal-notifier in various possible locations
+        possible_paths = [
+            os.path.join(pync_path, 'vendor', 'terminal-notifier-2.0.0', 'terminal-notifier.app'),
+            os.path.join(pync_path, 'vendor', 'terminal-notifier', 'terminal-notifier.app'),
+            os.path.join(pync_path, 'terminal-notifier.app'),
+        ]
+        for path in possible_paths:
         if os.path.exists(path):
             # Add the entire .app bundle
             datas.append((path, os.path.join('pync', 'vendor', os.path.basename(os.path.dirname(path)))))
@@ -483,7 +474,7 @@ echo "Check Console.app for any error messages"
 
 
 if __name__ == "__main__":
-    print(f"🌸 Mindful Touch macOS App Builder")
+    print("🌸 Mindful Touch macOS App Builder")
     print(f"   Version: {APP_VERSION}")
     print()
 

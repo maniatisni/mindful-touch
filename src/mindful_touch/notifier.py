@@ -21,9 +21,10 @@ class NotificationManager:
         """Detect the best available notification method."""
         if self.system == "Darwin":  # macOS
             try:
-                import pync
+                import importlib.util
 
-                return "pync"
+                if importlib.util.find_spec("pync"):
+                    return "pync"
             except ImportError:
                 try:
                     subprocess.run(["osascript", "-e", ""], capture_output=True, timeout=1)
@@ -40,17 +41,19 @@ class NotificationManager:
 
         elif self.system == "Windows":
             try:
-                import win10toast
+                import importlib.util
 
-                return "win10toast"
+                if importlib.util.find_spec("win10toast"):
+                    return "win10toast"
             except ImportError:
                 pass
 
         # Fallback
         try:
-            from plyer import notification
+            import importlib.util
 
-            return "plyer"
+            if importlib.util.find_spec("plyer"):
+                return "plyer"
         except ImportError:
             return None
 

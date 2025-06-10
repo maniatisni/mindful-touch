@@ -1,7 +1,7 @@
 """Entry point for mindful_touch package"""
 
 import sys
-import os
+
 from mindful_touch.main import main
 
 if __name__ == "__main__":

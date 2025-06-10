@@ -130,9 +130,7 @@ class HandFaceDetector:
             if sys.platform == "darwin":
                 import subprocess
 
-                result = subprocess.run(
-                    ["system_profiler", "SPCameraDataType"], capture_output=True, text=True, timeout=5
-                )
+                result = subprocess.run(["system_profiler", "SPCameraDataType"], capture_output=True, text=True, timeout=5)
                 if "no devices" in result.stdout.lower():
                     print("❌ No camera devices found. Please check camera connection.")
                     return False
@@ -140,9 +138,7 @@ class HandFaceDetector:
             self.cap = cv2.VideoCapture(self.camera_config.device_id)
             if not self.cap.isOpened():
                 if sys.platform == "darwin":
-                    print(
-                        "❌ Camera access denied. Please grant camera permission in System Preferences > Security & Privacy > Privacy > Camera"
-                    )
+                    print("❌ Camera access denied. Please grant camera permission in System Preferences > Security & Privacy > Privacy > Camera")
                 else:
                     print("❌ Failed to open camera. Please check camera connection and permissions.")
                 return False
@@ -187,9 +183,7 @@ class HandFaceDetector:
             z=sum(p.z for p in pts) / len(pts),
         )
 
-    def _get_landmark_region_center(
-        self, face_landmarks: Any, indices: List[int], width: int, height: int
-    ) -> Point3D:
+    def _get_landmark_region_center(self, face_landmarks: Any, indices: List[int], width: int, height: int) -> Point3D:
         """Compute center point of a set of face landmarks."""
         pts: List[Point3D] = []
         for idx in indices:
