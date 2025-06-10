@@ -1,0 +1,43 @@
+# .github/workflows/tag-release.yml
+name: Build and Release for Tags
+
+on:
+  push:
+    tags:
+      - 'v*'  # Push events to matching v*, i.e. v1.0, v20.15.10
+
+permissions:
+  contents: write
+  
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+      
+      - name: Set up Python
+        run: uv python install 3.11
+      
+      - name: Install dependencies
+        run: |
+          uv sync
+          uv pip install pyinstaller pillow matplotlib
+      
+      - name: Build macOS app
+        run: |
+          uv run python build_macos.py
+      
+      - name: Upload Release Assets
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            Mindful Touch-*.dmg
+            dist/Mindful Touch.app
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
