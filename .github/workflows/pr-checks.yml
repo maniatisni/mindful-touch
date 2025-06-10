@@ -38,6 +38,9 @@ jobs:
       - name: Validate conventional commits
         uses: wagoid/commitlint-github-action@v5
         if: github.event_name == 'pull_request'
+        with:
+          firstParent: true
+          failOnWarnings: false
 
   test-build:
     runs-on: macos-latest
