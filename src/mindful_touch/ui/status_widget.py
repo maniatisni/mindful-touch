@@ -1,9 +1,10 @@
 """Status widget for the GUI."""
 
 import time
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QGroupBox, QProgressBar, QFrame
-from PySide6.QtCore import Qt, QTimer
+
+from PySide6.QtCore import QTimer
 from PySide6.QtGui import QFont
+from PySide6.QtWidgets import QGroupBox, QHBoxLayout, QLabel, QProgressBar, QVBoxLayout, QWidget
 
 
 class StatusWidget(QWidget):

@@ -1,7 +1,7 @@
 """Simplified Qt-based GUI for Mindful Touch application."""
 
-import os
 import sys
+from pathlib import Path
 
 from PySide6.QtCore import Qt, QThread
 from PySide6.QtGui import QFont, QIcon, QPainter, QPainterPath, QPixmap
@@ -22,6 +22,18 @@ from ..notifier import NotificationManager
 from .detection_worker import DetectionWorker
 from .settings_widget import SettingsWidget
 from .status_widget import StatusWidget
+
+
+def get_resource_path(relative_path):
+    """Get absolute path to resource, works for dev and PyInstaller"""
+    if hasattr(sys, "_MEIPASS"):
+        # PyInstaller creates a temp folder and stores path in _MEIPASS
+        base_path = Path(sys._MEIPASS)
+    else:
+        # Development mode - go up to project root
+        base_path = Path(__file__).parent.parent.parent.parent
+
+    return str(base_path / relative_path)
 
 
 class MindfulTouchGUI(QMainWindow):
@@ -83,7 +95,7 @@ class MindfulTouchGUI(QMainWindow):
         header_layout = QVBoxLayout(header_frame)
         header_layout.setSpacing(8)
 
-        logo_path = os.path.join(os.getcwd(), "logo.png")
+        logo_path = get_resource_path("logo.png")
         logo_label = QLabel()
         logo_label.setFixedSize(200, 200)
         logo_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -124,13 +136,8 @@ class MindfulTouchGUI(QMainWindow):
 
     def create_privacy_section(self, layout):
         """Create privacy section."""
-        privacy_label = QLabel(
-            "🔒 All processing happens locally on your device.\n"
-            "No camera data or personal information is sent anywhere."
-        )
-        privacy_label.setStyleSheet(
-            "color: white; padding: 10px; background-color: #6c757d; " "border-radius: 5px; margin: 5px;"
-        )
+        privacy_label = QLabel("🔒 All processing happens locally on your device.\nNo camera data or personal information is sent anywhere.")
+        privacy_label.setStyleSheet("color: white; padding: 10px; background-color: #6c757d; border-radius: 5px; margin: 5px;")
         privacy_label.setWordWrap(True)
         privacy_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(privacy_label)
@@ -330,7 +337,7 @@ def main_gui():
     app = QApplication(sys.argv)
     app.setApplicationName("Mindful Touch")
     app.setOrganizationName("Mindful Touch Project")
-    icon_path = os.path.join(os.getcwd(), "logo.icns")
+    icon_path = get_resource_path("logo.icns")
     app.setWindowIcon(QIcon(icon_path))
     # Apply modern style
     app.setStyle("Fusion")

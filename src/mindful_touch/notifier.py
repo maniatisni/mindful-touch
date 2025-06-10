@@ -2,7 +2,6 @@
 
 import platform
 import subprocess
-import sys
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -75,7 +74,14 @@ class NotificationManager:
 
             elif self._working_method == "osascript":
                 script = f'display notification "{message}" with title "{title}"'
-                subprocess.run(["osascript", "-e", script], capture_output=True, timeout=5)
+                try:
+                    result = subprocess.run(["osascript", "-e", script], capture_output=True, text=True, timeout=5)
+                    if result.returncode != 0 and "not allowed" in result.stderr:
+                        print("⚠️  Notification permission required. Please grant permission in System Preferences.")
+                        print(f"🔔 {title}: {message}")
+                except subprocess.TimeoutExpired:
+                    print("⚠️  Notification system timeout")
+                    print(f"🔔 {title}: {message}")
 
             elif self._working_method == "notify-send":
                 subprocess.run(

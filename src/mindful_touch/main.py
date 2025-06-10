@@ -1,7 +1,12 @@
 """Simplified CLI application for Mindful Touch."""
 
-import signal
+import os
 import sys
+
+if sys.platform == "darwin" and hasattr(sys, "_MEIPASS"):
+    os.environ["QT_MAC_WANTS_LAYER"] = "1"
+
+import signal
 import time
 from typing import Optional
 
@@ -9,7 +14,7 @@ import click
 import cv2
 
 from .config import get_config, get_config_manager
-from .detector import HandFaceDetector, DetectionEvent
+from .detector import DetectionEvent, HandFaceDetector
 from .notifier import NotificationManager
 from .ui.qt_gui import main_gui
 

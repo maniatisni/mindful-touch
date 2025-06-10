@@ -1,6 +1,7 @@
 """Trichotillomania-specific detection using MediaPipe."""
 
 import math
+import sys
 import time
 from dataclasses import dataclass
 from enum import Enum
@@ -125,8 +126,25 @@ class HandFaceDetector:
     def initialize_camera(self) -> bool:
         """Initialize camera for capture."""
         try:
+            # On macOS, provide better error messages
+            if sys.platform == "darwin":
+                import subprocess
+
+                result = subprocess.run(
+                    ["system_profiler", "SPCameraDataType"], capture_output=True, text=True, timeout=5
+                )
+                if "no devices" in result.stdout.lower():
+                    print("❌ No camera devices found. Please check camera connection.")
+                    return False
+
             self.cap = cv2.VideoCapture(self.camera_config.device_id)
             if not self.cap.isOpened():
+                if sys.platform == "darwin":
+                    print(
+                        "❌ Camera access denied. Please grant camera permission in System Preferences > Security & Privacy > Privacy > Camera"
+                    )
+                else:
+                    print("❌ Failed to open camera. Please check camera connection and permissions.")
                 return False
 
             self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.camera_config.width)
@@ -134,8 +152,13 @@ class HandFaceDetector:
             self.cap.set(cv2.CAP_PROP_FPS, self.camera_config.fps)
             self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
+            # Test read
             ret, _ = self.cap.read()
-            return ret
+            if not ret:
+                print("❌ Camera opened but cannot read frames. Please check camera permissions.")
+                return False
+
+            return True
         except Exception as e:
             print(f"Camera initialization error: {e}")
             return False

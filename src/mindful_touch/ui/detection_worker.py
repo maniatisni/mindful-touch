@@ -1,9 +1,10 @@
 """Detection worker for GUI."""
 
 import time
-from PySide6.QtCore import QObject, Signal, QThread
 
-from ..detector import HandFaceDetector, DetectionEvent
+from PySide6.QtCore import QObject, Signal
+
+from ..detector import DetectionEvent, HandFaceDetector
 from ..notifier import NotificationManager
 
 
