@@ -1,27 +1,39 @@
 """Simplified Qt-based GUI for Mindful Touch application."""
 
 import sys
-import threading
+from pathlib import Path
+
+from PySide6.QtCore import Qt, QThread
+from PySide6.QtGui import QFont, QIcon, QPainter, QPainterPath, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
-    QMainWindow,
-    QVBoxLayout,
-    QHBoxLayout,
-    QWidget,
-    QPushButton,
-    QLabel,
-    QMessageBox,
     QFrame,
+    QHBoxLayout,
+    QLabel,
+    QMainWindow,
+    QMessageBox,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
 )
-from PySide6.QtCore import Qt, QThread, QTimer
-from PySide6.QtGui import QFont
 
 from ..config import ConfigManager
-from ..detector import HandFaceDetector
 from ..notifier import NotificationManager
 from .detection_worker import DetectionWorker
-from .status_widget import StatusWidget
 from .settings_widget import SettingsWidget
+from .status_widget import StatusWidget
+
+
+def get_resource_path(relative_path):
+    """Get absolute path to resource, works for dev and PyInstaller"""
+    if hasattr(sys, "_MEIPASS"):
+        # PyInstaller creates a temp folder and stores path in _MEIPASS
+        base_path = Path(sys._MEIPASS)
+    else:
+        # Development mode - go up to project root
+        base_path = Path(__file__).parent.parent.parent.parent
+
+    return str(base_path / relative_path)
 
 
 class MindfulTouchGUI(QMainWindow):
@@ -46,7 +58,7 @@ class MindfulTouchGUI(QMainWindow):
         """Setup the main user interface."""
         self.setWindowTitle("Mindful Touch - Trichotillomania Detection")
         self.setGeometry(100, 100, 500, 600)
-        self.setMinimumSize(650, 800)
+        self.setMinimumSize(750, 850)
 
         # Central widget
         central_widget = QWidget()
@@ -77,35 +89,55 @@ class MindfulTouchGUI(QMainWindow):
         self.status_bar.showMessage("Ready - Configure settings and start session")
 
     def create_header(self, layout):
-        """Create the header section."""
+        """Create the header section with a modern look and logo image."""
+
         header_frame = QFrame()
         header_layout = QVBoxLayout(header_frame)
+        header_layout.setSpacing(8)
 
-        # Title
-        title = QLabel("Mindful Touch")
-        title.setFont(QFont("Arial", 24, QFont.Weight.Bold))
-        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title.setStyleSheet("color: #2c3e50; margin: 10px;")
-        header_layout.addWidget(title)
-
-        # Subtitle
-        subtitle = QLabel("Mindfulness tool for trichotillomania")
-        subtitle.setFont(QFont("Arial", 12))
-        subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        subtitle.setStyleSheet("color: #7f8c8d; margin-bottom: 10px;")
-        header_layout.addWidget(subtitle)
-
+        logo_path = get_resource_path("logo.png")
+        logo_label = QLabel()
+        logo_label.setFixedSize(200, 200)
+        logo_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        pixmap = QPixmap(logo_path)
+        if not pixmap.isNull():
+            # Crop to circle
+            size = min(pixmap.width(), pixmap.height(), 200)
+            cropped = pixmap.scaled(size, size, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
+            mask = QPixmap(size, size)
+            mask.fill(Qt.transparent)
+            painter = QPainter(mask)
+            painter.setRenderHint(QPainter.Antialiasing)
+            path = QPainterPath()
+            path.addEllipse(0, 0, size, size)
+            painter.setClipPath(path)
+            painter.drawPixmap(0, 0, cropped)
+            painter.end()
+            logo_label.setPixmap(mask)
+            logo_label.setStyleSheet("margin-top: 18px; margin-bottom: 8px;")
+            header_layout.addWidget(logo_label, alignment=Qt.AlignmentFlag.AlignCenter)
+        else:
+            # Fallback to emoji if image not found
+            logo_label.setText("🌸")
+            logo_label.setStyleSheet(
+                """
+                QLabel {
+                    background: qradialgradient(cx:0.5, cy:0.5, radius:0.8, fx:0.5, fy:0.5, stop:0 #f8fafc, stop:1 #e0c3fc);
+                    border-radius: 70px;
+                    font-size: 80px;
+                    margin-top: 18px;
+                    margin-bottom: 8px;
+                    box-shadow: 0 2px 8px rgba(44,62,80,0.08);
+                }
+                """
+            )
+            header_layout.addWidget(logo_label, alignment=Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(header_frame)
 
     def create_privacy_section(self, layout):
         """Create privacy section."""
-        privacy_label = QLabel(
-            "🔒 All processing happens locally on your device.\n"
-            "No camera data or personal information is sent anywhere."
-        )
-        privacy_label.setStyleSheet(
-            "color: #2980b9; padding: 10px; background-color: #ecf0f1; " "border-radius: 5px; margin: 5px;"
-        )
+        privacy_label = QLabel("🔒 All processing happens locally on your device.\nNo camera data or personal information is sent anywhere.")
+        privacy_label.setStyleSheet("color: white; padding: 10px; background-color: #6c757d; border-radius: 5px; margin: 5px;")
         privacy_label.setWordWrap(True)
         privacy_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(privacy_label)
@@ -305,7 +337,8 @@ def main_gui():
     app = QApplication(sys.argv)
     app.setApplicationName("Mindful Touch")
     app.setOrganizationName("Mindful Touch Project")
-
+    icon_path = get_resource_path("logo.icns")
+    app.setWindowIcon(QIcon(icon_path))
     # Apply modern style
     app.setStyle("Fusion")
 

@@ -1,7 +1,7 @@
 """Settings widget for the GUI."""
 
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QSlider, QCheckBox, QLineEdit, QGroupBox
 from PySide6.QtCore import Qt, Signal
+from PySide6.QtWidgets import QCheckBox, QGroupBox, QHBoxLayout, QLabel, QLineEdit, QSlider, QVBoxLayout, QWidget
 
 from ..config import AppConfig
 

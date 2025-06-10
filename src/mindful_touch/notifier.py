@@ -2,7 +2,6 @@
 
 import platform
 import subprocess
-import sys
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -22,9 +21,10 @@ class NotificationManager:
         """Detect the best available notification method."""
         if self.system == "Darwin":  # macOS
             try:
-                import pync
+                import importlib.util
 
-                return "pync"
+                if importlib.util.find_spec("pync"):
+                    return "pync"
             except ImportError:
                 try:
                     subprocess.run(["osascript", "-e", ""], capture_output=True, timeout=1)
@@ -41,17 +41,19 @@ class NotificationManager:
 
         elif self.system == "Windows":
             try:
-                import win10toast
+                import importlib.util
 
-                return "win10toast"
+                if importlib.util.find_spec("win10toast"):
+                    return "win10toast"
             except ImportError:
                 pass
 
         # Fallback
         try:
-            from plyer import notification
+            import importlib.util
 
-            return "plyer"
+            if importlib.util.find_spec("plyer"):
+                return "plyer"
         except ImportError:
             return None
 
@@ -75,7 +77,14 @@ class NotificationManager:
 
             elif self._working_method == "osascript":
                 script = f'display notification "{message}" with title "{title}"'
-                subprocess.run(["osascript", "-e", script], capture_output=True, timeout=5)
+                try:
+                    result = subprocess.run(["osascript", "-e", script], capture_output=True, text=True, timeout=5)
+                    if result.returncode != 0 and "not allowed" in result.stderr:
+                        print("⚠️  Notification permission required. Please grant permission in System Preferences.")
+                        print(f"🔔 {title}: {message}")
+                except subprocess.TimeoutExpired:
+                    print("⚠️  Notification system timeout")
+                    print(f"🔔 {title}: {message}")
 
             elif self._working_method == "notify-send":
                 subprocess.run(
