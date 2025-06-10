@@ -28,16 +28,23 @@ jobs:
         run: |
           uv sync
           uv pip install pyinstaller pillow matplotlib
+          
+      - name: Install create-dmg
+        run: |
+          brew install create-dmg
       
       - name: Build macOS app
         run: |
           uv run python build_macos.py
+          # List files to verify what was created
+          ls -la
+          ls -la dist/
       
       - name: Upload Release Assets
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            Mindful Touch-*.dmg
-            dist/Mindful Touch.app
+            *.dmg
+            dist/*.app
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
