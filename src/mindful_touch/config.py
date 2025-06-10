@@ -12,10 +12,10 @@ class DetectionConfig(BaseModel):
     """Detection parameters."""
 
     sensitivity: float = Field(default=0.7, ge=0.1, le=1.0)
-    hand_face_threshold_cm: float = Field(default=15.0, ge=2.0, le=50.0)
+    hand_face_threshold_cm: float = Field(default=9.0, ge=2.0, le=50.0)
     detection_interval_ms: int = Field(default=100, ge=50, le=1000)
     confidence_threshold: float = Field(default=0.6, ge=0.3, le=0.95)
-    alert_delay_seconds: float = Field(default=0.5, ge=0.0, le=5.0)  # Require detection for this many seconds
+    alert_delay_seconds: float = Field(default=2, ge=0.0, le=5.0)  # Require detection for this many seconds
 
 
 class NotificationConfig(BaseModel):
@@ -25,7 +25,7 @@ class NotificationConfig(BaseModel):
     title: str = "Mindful Moment"
     message: str = "Take a gentle pause 🌸"
     duration_seconds: int = Field(default=3, ge=1, le=30)
-    cooldown_seconds: int = Field(default=10, ge=5, le=300)
+    cooldown_seconds: int = Field(default=6, ge=5, le=300)
 
 
 class CameraConfig(BaseModel):
