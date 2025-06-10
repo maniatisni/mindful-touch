@@ -10,6 +10,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
       
       - name: Install system dependencies
         run: |
@@ -35,15 +37,18 @@ jobs:
         run: |
           uv run python -c "import mindful_touch; print(f'Version: {mindful_touch.__version__}')"
       
-      # Temporarily disabled for this PR
-      # - name: Validate conventional commits
-      #   uses: wagoid/commitlint-github-action@v5
-      #   if: github.event_name == 'pull_request'
+      - name: Validate conventional commits
+        uses: wagoid/commitlint-github-action@v5
+        if: github.event_name == 'pull_request'
+        with:
+          fetch-depth: 1
 
   test-build:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
       
       - name: Install uv
         uses: astral-sh/setup-uv@v4
