@@ -331,36 +331,6 @@ class HandFaceDetector:
 
         return self.detect_frame(frame)
 
-    def calibrate(self, duration_seconds: int = 10) -> dict:
-        """Calibrate detector by measuring baseline distances."""
-        if not self.initialize_camera():
-            return {"error": "Could not start camera"}
-
-        distances = []
-        start_time = time.time()
-
-        try:
-            while time.time() - start_time < duration_seconds:
-                result = self.capture_and_detect()
-                if result and result.min_hand_face_distance_cm is not None:
-                    distances.append(result.min_hand_face_distance_cm)
-                time.sleep(0.033)
-        except Exception as e:
-            return {"error": f"Calibration failed: {e}"}
-        finally:
-            self.cleanup()
-
-        if not distances:
-            return {"error": "No calibration data collected"}
-
-        return {
-            "samples": len(distances),
-            "min_distance": min(distances),
-            "max_distance": max(distances),
-            "avg_distance": sum(distances) / len(distances),
-            "suggested_threshold": sum(distances) / len(distances) * 0.7,
-        }
-
     def cleanup(self) -> None:
         """Release camera resources."""
         if self.cap:
