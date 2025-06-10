@@ -183,7 +183,9 @@ class HandFaceDetector:
             z=sum(p.z for p in pts) / len(pts),
         )
 
-    def _get_landmark_region_center(self, face_landmarks: Any, indices: List[int], width: int, height: int) -> Point3D:
+    def _get_landmark_region_center(
+        self, face_landmarks: Any, indices: List[int], width: int, height: int
+    ) -> Point3D:
         """Compute center point of a set of face landmarks."""
         pts: List[Point3D] = []
         for idx in indices:
