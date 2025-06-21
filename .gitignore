@@ -82,6 +82,19 @@ logs/
 # UV
 .uv/
 
+# Node.js / JavaScript
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+.npm
+.yarn-integrity
+
+# Rust / Tauri
+src-tauri/target/
+src-tauri/Cargo.lock
+
 # macOS build artifacts
 build/
 dist/
@@ -90,3 +103,6 @@ dist/
 test_app.sh
 check_pync.sh
 entitlements.plist
+
+# Application specific
+region_signals/

@@ -3,29 +3,91 @@ Mindful Touch - Multi-Region Detection
 Gentle awareness tool for mindful hand movement tracking
 """
 
-
+import sys
+import argparse
 import cv2
 
 from .config import Config
 from .multi_region_detector import MultiRegionDetector
+from .camera_utils import initialize_camera
 
 
 def main():
+    parser = argparse.ArgumentParser(description="Mindful Touch - Multi-Region Detection")
+    parser.add_argument("--headless", action="store_true", help="Run without GUI (for Tauri)")
+    parser.add_argument("--camera", type=int, help="Camera index to use")
+    args = parser.parse_args()
+
     print("Mindful Touch - Multi-Region Detection")
+    print(f"Mode: {'Headless' if args.headless else 'GUI'}")
     print(f"Active regions: {', '.join(Config.ACTIVE_REGIONS)}")
 
     # Initialize multi-region detector
     detector = MultiRegionDetector()
 
-    # Initialize camera
-    cap = cv2.VideoCapture(0)
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, Config.CAMERA_WIDTH)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, Config.CAMERA_HEIGHT)
+    # Initialize camera with dynamic detection
+    cap = initialize_camera(
+        camera_index=args.camera,
+        width=Config.CAMERA_WIDTH,
+        height=Config.CAMERA_HEIGHT
+    )
 
-    if not cap.isOpened():
-        print("Error: Could not open camera")
+    if cap is None:
+        print("Error: Could not open any camera")
         return
 
+    if args.headless:
+        run_headless_mode(cap, detector)
+    else:
+        run_gui_mode(cap, detector)
+
+
+def run_headless_mode(cap, detector):
+    """Run detection without GUI - output JSON for Tauri"""
+    import json
+    import time
+    
+    print("Running in headless mode - outputting detection data...")
+    
+    frame_count = 0
+    try:
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                print("Error: Could not read frame")
+                break
+
+            # Flip frame horizontally for mirror effect
+            frame = cv2.flip(frame, 1)
+
+            # Process frame (without visualization)
+            _, detection_data = detector.process_frame(frame)
+
+            # Output detection data every 10 frames to reduce spam
+            frame_count += 1
+            if frame_count % 10 == 0:
+                # Send detection data to Tauri (via stdout)
+                output = {
+                    "type": "detection",
+                    "timestamp": time.time(),
+                    "data": detection_data
+                }
+                print(f"DETECTION_DATA: {json.dumps(output)}")
+                sys.stdout.flush()
+
+            # Small delay to prevent overwhelming the system
+            time.sleep(0.1)
+
+    except KeyboardInterrupt:
+        print("Detection service interrupted")
+    finally:
+        cap.release()
+        detector.cleanup()
+        print("Detection service stopped")
+
+
+def run_gui_mode(cap, detector):
+    """Run detection with GUI"""
     print("Camera initialized. Controls:")
     print("  'q' = quit")
     print("  's' = toggle scalp")
@@ -76,12 +138,12 @@ def main():
 
     except KeyboardInterrupt:
         print("\nShutting down...")
-
-    # Cleanup
-    cap.release()
-    cv2.destroyAllWindows()
-    detector.cleanup()
-    print("Cleanup complete.")
+    finally:
+        # Cleanup
+        cap.release()
+        cv2.destroyAllWindows()
+        detector.cleanup()
+        print("Cleanup complete.")
 
 
 def _draw_status_overlay(frame, detection_data):
