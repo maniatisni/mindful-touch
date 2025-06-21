@@ -12,10 +12,8 @@ Mindful Touch helps you become more aware of unconscious face-touching habits by
 
 - **Multi-region detection**: Monitors specific facial regions (scalp, eyebrows, eyes, mouth, beard)
 - **Real-time visualization**: Live camera feed with detection overlays
-- **Gentle notifications**: Provides calm, non-judgmental reminders
 - **Privacy-first**: All processing happens locally on your device
-- **Customizable regions**: Enable/disable specific detection areas
-- **Cross-platform**: Works on Windows, macOS, and Linux
+- **Lightweight**: Minimal dependencies and system resource usage
 
 ## 📋 Requirements
 
@@ -25,51 +23,117 @@ Mindful Touch helps you become more aware of unconscious face-touching habits by
 
 ## 🔧 Installation
 
-### Clone the repository
+### Step 1: Install UV (recommended)
+
+**macOS/Linux:**
 ```bash
-git clone https://github.com/maniatisni/mindful-touch.git
-cd mindful-touch
+curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
-### Install dependencies
+**Windows:**
 ```bash
-pip install -r requirements.txt
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
+**Alternative (pip):**
+```bash
+pip install uv
+```
+
+### Step 2: Clone and setup
+
+```bash
+# Clone the repository
+git clone https://github.com/maniatisni/mindful-touch.git
+cd mindful-touch
+
+# Install dependencies
+uv sync
+
+# Install the application
+uv pip install -e .
 ```
 
 ## 🚀 Quick Start
 
-To start the multi-region detection application:
-
+### Run with UV (recommended)
 ```bash
-python -m mindful_touch
+uv run mindful-touch
 ```
 
-## 🎮 Controls
+### Alternative methods
+```bash
+# Run as module
+uv run python -m mindful_touch
 
-While the application is running, use these keyboard shortcuts:
+# If installed globally
+mindful-touch
+```
 
-- **q**: Quit the application
-- **s**: Toggle scalp detection
-- **e**: Toggle eyebrow detection
-- **y**: Toggle eye detection
-- **m**: Toggle mouth detection
-- **b**: Toggle beard detection
+## 🎮 Usage
 
-## 🔧 Configuration
+When the application starts, you'll see:
+1. **Live camera feed** with detection visualization
+2. **Status overlay** showing detection information
+3. **Region boundaries** drawn around active detection areas
 
-The application uses MediaPipe for accurate hand and face tracking. You can customize detection thresholds, region sensitivity, and visual settings by modifying the configuration parameters in the code.
+## 🛠️ Development
 
-## 🔒 Privacy Information
+### Running linting and code checks
+```bash
+# Check code quality
+uv run ruff check src/
+
+# Auto-fix issues
+uv run ruff check src/ --fix
+```
+
+## 🔍 Troubleshooting
+
+### Camera Issues
+- **No camera detected**: Ensure your webcam is connected and not used by other applications
+- **Poor detection**: Ensure good lighting and position camera at eye level
+- **Permission errors**: Grant camera permissions to your terminal/application
+
+### Performance Issues
+- **High CPU usage**: Close other camera applications
+- **Slow detection**: Ensure adequate lighting for better MediaPipe performance
+
+### Common Solutions
+```bash
+# Reinstall dependencies
+uv sync --reinstall
+
+# Update to latest version
+git pull
+uv sync
+```
+
+## 🔒 Privacy & Security
 
 Mindful Touch is designed with privacy as a core principle:
 
-- All processing happens locally on your device
-- No images or data are sent to any server
-- The application only uses your camera when running
+- **Local processing**: All detection happens on your device
+- **No data transmission**: No images or data sent to external servers
+- **No storage**: By default, no images or detection data is saved
+- **Camera access**: Only active when application is running
+
+## 🧠 Mindfulness Tips
+
+Mindful Touch works best when combined with intention:
+
+1. **Set an intention**: Before starting, take a moment to set an intention for awareness
+2. **Gentle acknowledgment**: When you see detection alerts, simply acknowledge without judgment
+3. **Breathe and release**: Take a breath and gently move your hand away
+4. **Notice patterns**: Over time, observe when you're most likely to touch your face
 
 ## 📜 License
 
 Mindful Touch is released under the MIT License. See the [LICENSE](LICENSE) file for details.
+
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit issues, feature requests, or pull requests.
 
 ---
 
