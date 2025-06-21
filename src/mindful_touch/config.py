@@ -1,110 +1,38 @@
-"""Configuration management for Mindful Touch."""
-
-import json
-from pathlib import Path
-from typing import Any, Optional
-
-from platformdirs import user_config_dir
-from pydantic import BaseModel, Field
+# Configuration for Mindful Touch Multi-Region Detection
+# Clean, focused configuration
 
 
-class DetectionConfig(BaseModel):
-    """Detection parameters."""
+class Config:
+    # Camera settings
+    CAMERA_WIDTH = 1280
+    CAMERA_HEIGHT = 720
 
-    sensitivity: float = Field(default=0.7, ge=0.1, le=1.0)
-    hand_face_threshold_cm: float = Field(default=9.0, ge=2.0, le=50.0)
-    detection_interval_ms: int = Field(default=100, ge=50, le=1000)
-    confidence_threshold: float = Field(default=0.6, ge=0.3, le=0.95)
-    alert_delay_seconds: float = Field(default=2, ge=0.0, le=5.0)  # Require detection for this many seconds
+    # MediaPipe settings
+    HAND_DETECTION_CONFIDENCE = 0.7
+    HAND_TRACKING_CONFIDENCE = 0.7
+    FACE_DETECTION_CONFIDENCE = 0.7
+    FACE_TRACKING_CONFIDENCE = 0.7
 
+    # Detection settings
+    CONTACT_THRESHOLD = 0.05  # Distance threshold for contact detection
+    MIN_DETECTION_TIME = 0.3  # Seconds before triggering alert
 
-class NotificationConfig(BaseModel):
-    """Notification settings."""
+    # Visual settings
+    REGION_COLOR = (0, 255, 255)  # Yellow region outlines
+    CONTACT_COLOR = (0, 0, 255)  # Red contact points
+    HAND_COLOR = (0, 255, 0)  # Green hand landmarks
 
-    enabled: bool = True
-    title: str = "Mindful Moment"
-    message: str = "Take a gentle pause 🌸"
-    duration_seconds: int = Field(default=3, ge=1, le=30)
-    cooldown_seconds: int = Field(default=6, ge=5, le=300)
+    # Available regions (can be enabled/disabled)
+    AVAILABLE_REGIONS = ["scalp", "eyebrows", "eyes", "mouth", "beard"]
 
+    # Currently active regions
+    ACTIVE_REGIONS = ["scalp"]  # Start with scalp only
 
-class CameraConfig(BaseModel):
-    """Camera settings."""
-
-    device_id: int = Field(default=0, ge=0)
-    width: int = Field(default=640, ge=320, le=1920)
-    height: int = Field(default=480, ge=240, le=1080)
-    fps: int = Field(default=30, ge=10, le=60)
-
-
-class AppConfig(BaseModel):
-    """Main configuration."""
-
-    detection: DetectionConfig = Field(default_factory=DetectionConfig)
-    notifications: NotificationConfig = Field(default_factory=NotificationConfig)
-    camera: CameraConfig = Field(default_factory=CameraConfig)
-
-
-class ConfigManager:
-    """Manages application configuration."""
-
-    def __init__(self) -> None:
-        self._config_dir = Path(user_config_dir("mindful-touch"))
-        self._config_file = self._config_dir / "settings.json"
-        self._config_dir.mkdir(parents=True, exist_ok=True)
-        self._config: Optional[AppConfig] = None
-
-    def load_config(self) -> AppConfig:
-        """Load configuration from file or create default."""
-        if self._config:
-            return self._config
-
-        if self._config_file.exists():
-            try:
-                with open(self._config_file) as f:
-                    self._config = AppConfig(**json.load(f))
-            except Exception:
-                self._config = AppConfig()
-        else:
-            self._config = AppConfig()
-
-        return self._config
-
-    def save_config(self, config: Optional[AppConfig] = None) -> None:
-        """Save configuration to file."""
-        if not config:
-            config = self._config
-        if not config:
-            return
-
-        with open(self._config_file, "w") as f:
-            json.dump(config.model_dump(), f, indent=2)
-        self._config = config
-
-    def update_config(self, **kwargs: Any) -> AppConfig:
-        """Update specific configuration values."""
-        config = self.load_config()
-        config_dict = config.model_dump()
-
-        for key, value in kwargs.items():
-            if key in config_dict and isinstance(value, dict):
-                config_dict[key].update(value)
-            else:
-                config_dict[key] = value
-
-        updated_config = AppConfig(**config_dict)
-        self.save_config(updated_config)
-        return updated_config
-
-
-_config_manager = ConfigManager()
-
-
-def get_config() -> AppConfig:
-    """Get current configuration."""
-    return _config_manager.load_config()
-
-
-def get_config_manager() -> ConfigManager:
-    """Get configuration manager instance."""
-    return _config_manager
+    # Region-specific settings
+    REGION_SETTINGS = {
+        "scalp": {"contact_threshold": 0.05, "min_detection_time": 0.3, "show_landmarks": True},
+        "eyebrows": {"contact_threshold": 0.02, "min_detection_time": 0.2, "show_landmarks": True},
+        "eyes": {"contact_threshold": 0.02, "min_detection_time": 0.2, "show_landmarks": True},
+        "mouth": {"contact_threshold": 0.03, "min_detection_time": 0.2, "show_landmarks": True},
+        "beard": {"contact_threshold": 0.04, "min_detection_time": 0.25, "show_landmarks": True},
+    }
