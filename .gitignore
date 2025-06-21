@@ -92,8 +92,8 @@ package-lock.json
 .yarn-integrity
 
 # Rust / Tauri
-src-tauri/target/
-src-tauri/Cargo.lock
+frontend/src-tauri/target/
+frontend/src-tauri/Cargo.lock
 
 # macOS build artifacts
 build/

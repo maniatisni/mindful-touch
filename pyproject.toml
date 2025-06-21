@@ -58,7 +58,7 @@ linux = [
 ]
 
 [project.scripts]
-mindful-touch = "mindful_touch.main:main"
+mindful-touch = "backend.detection.main:main"
 
 [project.urls]
 Homepage = "https://github.com/maniatisni/mindful-touch"
@@ -66,7 +66,7 @@ Repository = "https://github.com/maniatisni/mindful-touch"
 Issues = "https://github.com/maniatisni/mindful-touch/issues"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/mindful_touch"]
+packages = ["backend"]
 
 [tool.black]
 line-length = 88
