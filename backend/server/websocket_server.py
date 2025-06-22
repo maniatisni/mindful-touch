@@ -182,6 +182,13 @@ class DetectionWebSocketServer:
         except asyncio.TimeoutError:
             return None
 
+    def get_region_toggle_sync(self):
+        """Get region toggle request synchronously (for non-async detection thread)"""
+        try:
+            return self.region_toggles.get_nowait()
+        except asyncio.QueueEmpty:
+            return None
+
     def run_in_thread(self):
         """Run the WebSocket server in a separate thread"""
 

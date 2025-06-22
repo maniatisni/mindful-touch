@@ -134,9 +134,20 @@ def run_headless_mode(cap, detector, verbose=False):
             # Process frame (without visualization)
             _, detection_data = detector.process_frame(frame)
 
-            # Check for region toggle requests from WebSocket (simplified)
-            # Note: For now we'll keep the region toggles simple
-            # In the future we could use proper async handling
+            # Check for region toggle requests from WebSocket
+            toggle_request = ws_server.get_region_toggle_sync()
+            if toggle_request:
+                region = toggle_request.get('region')
+                enabled = toggle_request.get('enabled')
+                
+                if enabled:
+                    if region not in Config.ACTIVE_REGIONS:
+                        Config.ACTIVE_REGIONS.append(region)
+                        logger.info(f"Region '{region}' enabled")
+                else:
+                    if region in Config.ACTIVE_REGIONS:
+                        Config.ACTIVE_REGIONS.remove(region)
+                        logger.info(f"Region '{region}' disabled")
 
             # Send detection data via WebSocket every 3 frames
             frame_count += 1
