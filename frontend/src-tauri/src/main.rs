@@ -29,15 +29,14 @@ async fn start_python_backend() -> Result<String, String> {
                     // Process is still running
                     return Ok("Python backend is already running".to_string());
                 }
-                Err(e) => {
-                    println!("Error checking process status: {}", e);
+                Err(_) => {
                     *process_guard = None;
                 }
             }
         }
     }
 
-    println!("Starting Python backend...");
+    // Starting Python backend
 
     // Try different paths to find the project root
     let possible_paths = vec![
@@ -49,14 +48,9 @@ async fn start_python_backend() -> Result<String, String> {
 
     for path in possible_paths {
         let backend_dir = format!("{}backend", path);
-        println!("Checking path: {} (backend dir: {})", path, backend_dir);
         if !std::path::Path::new(&backend_dir).exists() {
-            println!("Backend directory does not exist at: {}", backend_dir);
             continue;
         }
-        
-        println!("Found backend directory at: {}", backend_dir);
-        println!("Attempting to spawn process from path: {}", path);
         
         let child = Command::new("uv")
             .args(&["run", "python", "-m", "backend.detection.main", "--headless"])
@@ -67,8 +61,6 @@ async fn start_python_backend() -> Result<String, String> {
 
         match child {
             Ok(child) => {
-                println!("Python process spawned successfully from path: {}", path);
-                
                 // Store the process
                 {
                     let mut process_guard = PYTHON_PROCESS.lock().unwrap();
@@ -76,13 +68,11 @@ async fn start_python_backend() -> Result<String, String> {
                 }
                 
                 // Wait for backend to initialize
-                println!("Waiting for backend to initialize...");
                 thread::sleep(Duration::from_millis(3000));
                 
                 return Ok("Python backend started successfully".to_string());
             }
-            Err(e) => {
-                println!("Failed to spawn process from path {}: {}", path, e);
+            Err(_) => {
                 continue;
             }
         }
