@@ -144,9 +144,7 @@ class TestWebSocketServer:
         uri = f"ws://localhost:{websocket_server.test_port}"
 
         # Connect multiple clients
-        async with websockets.connect(uri) as client1, websockets.connect(uri) as client2, websockets.connect(
-            uri
-        ) as client3:
+        async with websockets.connect(uri) as client1, websockets.connect(uri) as client2, websockets.connect(uri) as client3:
             # Send detection data
             mock_data = {
                 "timestamp": time.time(),
