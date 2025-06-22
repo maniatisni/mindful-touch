@@ -5,7 +5,9 @@ WebSocket server for real-time communication between detection engine and fronte
 import asyncio
 import json
 import logging
+import socket
 import threading
+import time
 from typing import Any, Dict, Set
 
 import websockets
@@ -21,44 +23,69 @@ class DetectionWebSocketServer:
         self.server = None
         self.running = False
         self.loop = None  # Store the event loop
+        self.ready_event = threading.Event()  # Add event for signaling server readiness
 
         # Shared state between detection thread and WebSocket server
         self.latest_detection_data = {}
         self.region_toggles = asyncio.Queue()
+        
+    def is_port_in_use(self):
+        """Check if the port is already in use"""
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            return s.connect_ex((self.host, self.port)) == 0
 
     async def register_client(self, websocket):
         """Register a new WebSocket client"""
+        client_id = id(websocket)
         self.clients.add(websocket)
-        logger.info(f"Client connected. Total clients: {len(self.clients)}")
+        logger.info(f"Client {client_id} connected. Total clients: {len(self.clients)}")
 
         # Send current state to new client
         if self.latest_detection_data:
             await self.send_to_client(websocket, {"type": "detection_data", "data": self.latest_detection_data})
+            logger.debug(f"Sent initial detection data to client {client_id}")
 
     async def unregister_client(self, websocket):
         """Unregister a WebSocket client"""
+        client_id = id(websocket)
+        was_registered = websocket in self.clients
         self.clients.discard(websocket)
-        logger.info(f"Client disconnected. Total clients: {len(self.clients)}")
+        logger.info(f"Client {client_id} disconnected (was registered: {was_registered}). Total clients: {len(self.clients)}")
 
     async def send_to_client(self, websocket, message: Dict[str, Any]):
         """Send message to a specific client"""
+        client_id = id(websocket)
         try:
             await websocket.send(json.dumps(message))
-        except websockets.exceptions.ConnectionClosed:
+            return True
+        except websockets.exceptions.ConnectionClosed as e:
+            logger.info(f"Connection closed when sending to client {client_id}: {e.code} - {e.reason}")
             await self.unregister_client(websocket)
+            return False
         except Exception as e:
-            logger.error(f"Error sending message to client: {e}")
+            logger.error(f"Error sending message to client {client_id}: {e}")
+            return False
 
     async def broadcast_to_all(self, message: Dict[str, Any]):
         """Broadcast message to all connected clients"""
         if not self.clients:
+            logger.debug("No clients connected, skipping broadcast")
             return
 
         # Create a copy of clients to avoid modification during iteration
         clients_copy = self.clients.copy()
-
+        client_count = len(clients_copy)
+        
+        if client_count > 0:
+            logger.debug(f"Broadcasting to {client_count} clients")
+            
         # Send to all clients concurrently
-        await asyncio.gather(*[self.send_to_client(client, message) for client in clients_copy], return_exceptions=True)
+        results = await asyncio.gather(*[self.send_to_client(client, message) for client in clients_copy], return_exceptions=True)
+        
+        # Count successful sends
+        successful = sum(1 for r in results if r is True)
+        if successful < client_count:
+            logger.debug(f"Broadcast completed: {successful}/{client_count} clients received message")
 
     async def handle_client_message(self, websocket, message_str: str):
         """Handle incoming messages from clients"""
@@ -91,17 +118,22 @@ class DetectionWebSocketServer:
 
     async def client_handler(self, websocket):
         """Handle individual client connections"""
+        client_id = id(websocket)
+        logger.info(f"New client connection: {client_id}")
+        
         await self.register_client(websocket)
 
         try:
             async for message in websocket:
                 await self.handle_client_message(websocket, message)
-        except websockets.exceptions.ConnectionClosed:
-            pass
+        except websockets.exceptions.ConnectionClosed as e:
+            logger.info(f"Client {client_id} connection closed: {e.code} - {e.reason}")
         except Exception as e:
-            logger.error(f"Error in client handler: {e}")
+            logger.error(f"Error in client handler for client {client_id}: {e}")
+            logger.exception("Detailed exception info:")
         finally:
             await self.unregister_client(websocket)
+            logger.info(f"Client {client_id} connection cleanup complete")
 
     async def start_server(self):
         """Start the WebSocket server"""
@@ -110,10 +142,16 @@ class DetectionWebSocketServer:
         # Store the event loop
         self.loop = asyncio.get_running_loop()
 
-        self.server = await websockets.serve(self.client_handler, self.host, self.port, ping_interval=20, ping_timeout=10)
-
-        self.running = True
-        logger.info("WebSocket server started successfully")
+        try:
+            self.server = await websockets.serve(self.client_handler, self.host, self.port, ping_interval=20, ping_timeout=10)
+            self.running = True
+            logger.info("WebSocket server started successfully")
+            # Explicitly return success to prevent any miscommunication
+            return True
+        except Exception as e:
+            logger.error(f"Failed to start WebSocket server: {e}")
+            self.running = False
+            return False
 
     async def stop_server(self):
         """Stop the WebSocket server"""
@@ -152,15 +190,38 @@ class DetectionWebSocketServer:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
 
+            async def server_started():
+                success = await self.start_server()
+                if success:
+                    # Signal that the server is ready
+                    self.ready_event.set()
+                    logger.info("WebSocket server signaled ready")
+                else:
+                    logger.error("WebSocket server failed to start properly")
+                    self.ready_event.set()  # Set the event to avoid hanging, even though it failed
+
             try:
-                loop.run_until_complete(self.start_server())
+                loop.run_until_complete(server_started())
                 loop.run_forever()
             except KeyboardInterrupt:
                 logger.info("WebSocket server interrupted")
+            except Exception as e:
+                logger.error(f"WebSocket server error: {e}")
+                self.ready_event.set()  # Release any waiting threads
             finally:
                 loop.run_until_complete(self.stop_server())
                 loop.close()
 
         thread = threading.Thread(target=run_server, daemon=True)
         thread.start()
+        
+        # Wait for server to start (with timeout)
+        server_start_timeout = 10  # seconds
+        if not self.ready_event.wait(timeout=server_start_timeout):
+            logger.warning(f"WebSocket server startup timed out after {server_start_timeout}s")
+            # Even if timeout occurs, continue if the server is running
+            # This is important as the server might be running but just slow to signal
+        elif self.running:
+            logger.info("WebSocket server confirmed ready within timeout period")
+        
         return thread

@@ -17,59 +17,112 @@ def main():
     parser.add_argument("--headless", action="store_true", help="Run without GUI (for Tauri)")
     parser.add_argument("--camera", type=int, help="Camera index to use")
     parser.add_argument("--mock-camera", action="store_true", help="Use mock camera for CI/testing")
+    parser.add_argument("--verbose", action="store_true", help="Enable verbose logging")
     args = parser.parse_args()
 
-    print("Mindful Touch - Multi-Region Detection")
-    print(f"Mode: {'Headless' if args.headless else 'GUI'}")
-    print(f"Active regions: {', '.join(Config.ACTIVE_REGIONS)}")
+    # Configure logging level
+    import logging
+    log_level = logging.DEBUG if args.verbose else logging.INFO
+    logging.basicConfig(level=log_level, format='%(asctime)s - %(levelname)s - %(message)s')
+    logger = logging.getLogger(__name__)
+
+    if args.verbose:
+        logger.info("Mindful Touch - Multi-Region Detection")
+        logger.info(f"Mode: {'Headless' if args.headless else 'GUI'}")
+        logger.info(f"Active regions: {', '.join(Config.ACTIVE_REGIONS)}")
+        
+        # Print paths to help debug import issues in production
+        import sys
+        import os
+        logger.debug(f"Python executable: {sys.executable}")
+        logger.debug(f"Current working directory: {os.getcwd()}")
+        logger.debug(f"Python path: {sys.path}")
 
     # Initialize multi-region detector
+    if args.verbose:
+        logger.info("Initializing detector...")
     detector = MultiRegionDetector()
 
     # Initialize camera with dynamic detection or mock for CI
     if args.mock_camera:
-        print("Using mock camera for CI/testing environment")
+        if args.verbose:
+            logger.info("Using mock camera for CI/testing environment")
         cap = MockCamera(Config.CAMERA_WIDTH, Config.CAMERA_HEIGHT)
     else:
+        if args.verbose:
+            logger.info("Initializing camera...")
         cap = initialize_camera(camera_index=args.camera, width=Config.CAMERA_WIDTH, height=Config.CAMERA_HEIGHT)
 
         if cap is None:
-            print("Warning: Could not open any camera, falling back to mock camera")
+            if args.verbose:
+                logger.warning("Could not open any camera, falling back to mock camera")
             cap = MockCamera(Config.CAMERA_WIDTH, Config.CAMERA_HEIGHT)
 
     if args.headless:
-        run_headless_mode(cap, detector)
+        run_headless_mode(cap, detector, verbose=args.verbose)
     else:
         run_gui_mode(cap, detector)
 
 
-def run_headless_mode(cap, detector):
+def run_headless_mode(cap, detector, verbose=False):
     """Run detection without GUI - WebSocket mode for Tauri"""
     import logging
     import time
+    import os
 
     from ..server import DetectionWebSocketServer
 
     # Set up logging
-    logging.basicConfig(level=logging.INFO)
-    logging.getLogger(__name__)
+    log_level = logging.DEBUG if verbose else logging.INFO
+    logging.basicConfig(level=log_level, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    logger = logging.getLogger(__name__)
+    
+    # Print additional debug info
+    if verbose:
+        logger.debug(f"Current working directory: {os.getcwd()}")
+        logger.debug(f"Process ID: {os.getpid()}")
+        import platform
+        logger.debug(f"Platform: {platform.platform()}")
+        logger.debug(f"Python version: {platform.python_version()}")
 
-    print("Running in headless mode with WebSocket server...")
-    print("WebSocket server will be available at ws://localhost:8765")
+    if verbose:
+        logger.info("Running in headless mode with WebSocket server...")
+        logger.info("WebSocket server will be available at ws://localhost:8765")
 
     # Create and start WebSocket server
-    ws_server = DetectionWebSocketServer()
-    ws_server.run_in_thread()
-
-    # Give server time to start
-    time.sleep(1)
+    # Try to find an available port starting from 8765
+    port = 8765
+    max_port_attempts = 5
+    ws_server = None
+    
+    for attempt in range(max_port_attempts):
+        try:
+            logger.info(f"Attempting to start WebSocket server on port {port} (attempt {attempt+1}/{max_port_attempts})")
+            ws_server = DetectionWebSocketServer(port=port)
+            ws_server_thread = ws_server.run_in_thread()
+            # If we get here, the server started successfully
+            logger.info(f"WebSocket server started on port {port}")
+            break
+        except Exception as e:
+            logger.warning(f"Failed to start WebSocket server on port {port}: {e}")
+            port += 1
+            
+    if ws_server is None:
+        logger.error(f"Failed to start WebSocket server after {max_port_attempts} attempts")
+        return
+    
+    # Log whether the server is ready
+    if ws_server.ready_event.is_set():
+        logger.info("WebSocket server is ready and running")
+    else:
+        logger.warning("WebSocket server ready event not set - this may indicate a startup issue")
 
     frame_count = 0
     try:
         while True:
             ret, frame = cap.read()
             if not ret:
-                print("Error: Could not read frame")
+                logger.error("Could not read frame from camera")
                 break
 
             # Flip frame horizontally for mirror effect
@@ -87,16 +140,20 @@ def run_headless_mode(cap, detector):
             if frame_count % 3 == 0:
                 detection_output = {"timestamp": time.time(), "active_regions": Config.ACTIVE_REGIONS, **detection_data}
                 ws_server.update_detection_data(detection_output)
+                if verbose and frame_count % 30 == 0:  # Log every ~30 frames when verbose
+                    logger.debug(f"Detection data sent: {len(Config.ACTIVE_REGIONS)} active regions, {detection_data.get('contact_points', 0)} contact points")
 
             # Small delay to prevent overwhelming the system
             time.sleep(0.05)
 
     except KeyboardInterrupt:
-        print("Detection service interrupted")
+        logger.info("Detection service interrupted by keyboard")
+    except Exception as e:
+        logger.error(f"Unexpected error in detection loop: {e}", exc_info=True)
     finally:
         cap.release()
         detector.cleanup()
-        print("Detection service stopped")
+        logger.info("Detection service stopped and resources released")
 
 
 def run_gui_mode(cap, detector):

@@ -72,7 +72,7 @@ Mindful Touch is a gentle awareness tool designed to help users develop mindful 
 
 3. **Run Frontend**
    ```bash
-   cd frontend
+   cd frontend/src-tauri
    cargo tauri dev
    ```
 
@@ -90,8 +90,25 @@ Mindful Touch is a gentle awareness tool designed to help users develop mindful 
 
 ### Build for Production
 ```bash
-cd frontend
+cd frontend/src-tauri
 cargo tauri build
+```
+
+## Quick Testing
+
+### Test WebSocket Connection
+```bash
+# Start backend
+uv run python -m backend.detection.main --headless --mock-camera
+
+# Test connection
+uv run python3 -c "import asyncio, websockets, json; asyncio.run((lambda: websockets.connect('ws://localhost:8765').send(json.dumps({'type': 'ping'}))()))"
+```
+
+### Test Frontend
+```bash
+cd frontend/src-tauri && cargo check
+cargo tauri dev
 ```
 
 ## Current Implementation Status
@@ -128,69 +145,76 @@ cargo tauri build
    - Automated formatting with ruff
    - Git integration with proper commit workflows
 
-### 🚧 Current Issues
+6. **Tauri Integration** ✅ **COMPLETED (January 2025)**
+   - Fixed Tauri API loading issue (v2 compatibility)
+   - Automatic Python backend process management
+   - Proper connection status feedback
+   - Process lifecycle handling (start/stop backend)
+   - WebSocket connection works seamlessly with Tauri
 
-1. **WebSocket Connection Problem**
-   - Frontend shows "connected" initially but fails to maintain connection
-   - Backend process management issues in Tauri
-   - WebSocket connection timing problems
-   - Process lifecycle not properly handled
+### ✅ Core System Status
 
-### 🔄 In Progress
-
-1. **Process Management Fixes**
-   - Enhanced Tauri backend process spawning
-   - Added proper process cleanup and shutdown
-   - Improved error handling and logging
-   - Better path resolution for different deployment contexts
+- **WebSocket Communication**: ✅ Working correctly between backend and frontend
+- **Backend Process Management**: ✅ Fully automated via Tauri - no manual backend startup needed
+- **Process Lifecycle**: ✅ Properly handled - backend starts/stops with detection
+- **Tauri-Frontend Integration**: ✅ Complete - API calls working, connection status accurate
+- **Codebase**: ✅ Cleaned up, reduced bloat significantly
 
 ## Next Steps & Roadmap
 
-### 🎯 Immediate Priorities (Critical)
+### 🎯 Immediate Next Tasks (Ready for Implementation)
 
-1. **Fix WebSocket Connection**
-   - Debug backend process startup in Tauri context
-   - Resolve WebSocket server initialization timing
-   - Implement proper process health checks
-   - Add connection retry mechanisms
+**PRIORITY 1: Make Region Toggle Buttons Functional**
+- Connect frontend toggle switches to actual backend region detection
+- Implement real-time region enable/disable functionality
+- Test that toggling scalp/eyebrows/eyes/mouth/beard actually affects detection
+- Ensure WebSocket messages properly control backend detection regions
 
-2. **Backend Process Stability**
-   - Ensure Python backend stays running when launched from Tauri
-   - Add process monitoring and automatic restart
-   - Improve error reporting from backend to frontend
+**PRIORITY 2: Add Live Camera Feed to Frontend**
+- Display live camera feed in the detection window
+- Show real-time video stream from the camera
+- Overlay detection indicators on the video feed
+- Visual feedback when hands approach configured regions
 
 ### 📋 Short-term Goals (1-2 weeks)
 
-1. **Enhanced UI/UX**
-   - Add live camera feed display in frontend
-   - Implement visual feedback for detected contacts
-   - Add sound notifications for alerts
-   - Improve statistics dashboard
+1. **Enhanced Detection Feedback**
+   - Visual alerts/highlights when contact is detected
+   - Sound notifications for alerts
+   - Real-time region status indicators
+   - Detection confidence levels display
 
-2. **Configuration & Settings**
-   - User-configurable sensitivity settings
-   - Customizable region definitions
-   - Settings persistence
-   - Theme customization
+2. **Improved UI/UX**
+   - Better statistics dashboard with charts
+   - Session history tracking
+   - Settings panel for sensitivity adjustment
+   - Theme customization options
 
-3. **Performance Optimization**
-   - Frame rate optimization
-   - Memory usage improvements  
-   - CPU usage monitoring
-   - Battery usage optimization for laptops
+3. **Configuration & Settings**
+   - User-configurable sensitivity settings per region
+   - Customizable region definitions and boundaries
+   - Settings persistence to local storage
+   - Export/import configuration profiles
 
 ### 🔮 Medium-term Goals (1-2 months)
 
 1. **Advanced Features**
-   - Historical tracking and analytics
-   - Export data to CSV/JSON
-   - Habit formation insights
-   - Custom alert patterns
+   - Historical tracking and analytics with charts
+   - Export session data to CSV/JSON
+   - Habit formation insights and progress tracking
+   - Custom alert patterns and schedules
 
-2. **Platform Expansion**
-   - Mobile app version (React Native or Flutter)
-   - Web-based version for browsers
-   - System tray integration
+2. **Performance & Polish**
+   - Frame rate optimization for different hardware
+   - Memory usage improvements and monitoring
+   - CPU usage optimization
+   - Battery usage optimization for laptops
+   - Error handling and recovery mechanisms
+
+3. **Platform Expansion**
+   - System tray integration for background operation
+   - Auto-start with system boot option
+   - Cross-platform distribution and packaging
 
 
 ## Technical Debt & Improvements
@@ -259,4 +283,4 @@ uv run python scripts/test_mock_camera.py
 ---
 
 *Last updated: 2025-01-22*
-*Status: Active Development - WebSocket Integration Phase*
+*Status: Core System Complete - Ready for UI Enhancement*

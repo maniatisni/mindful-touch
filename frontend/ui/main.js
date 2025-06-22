@@ -1,11 +1,16 @@
 // Mindful Touch - Frontend JavaScript
-// Check if Tauri is available
+// Check if Tauri is available (Tauri v2 format)
 let invoke;
-if (window.__TAURI__ && window.__TAURI__.tauri) {
-    invoke = window.__TAURI__.tauri.invoke;
+if (window.__TAURI__ && window.__TAURI__.core) {
+    invoke = window.__TAURI__.core.invoke;
     console.log('Tauri API found');
+} else if (window.__TAURI__ && window.__TAURI__.tauri) {
+    // Fallback for older Tauri versions
+    invoke = window.__TAURI__.tauri.invoke;
+    console.log('Tauri API found (legacy)');
 } else {
     console.error('Tauri API not found');
+    console.log('Available window.__TAURI__:', window.__TAURI__);
     // Fallback function for testing
     invoke = async (cmd, args) => {
         console.log(`Mock invoke: ${cmd}`, args);
@@ -28,6 +33,11 @@ class MindfulTouchApp {
         this.wsUrl = 'ws://localhost:8765';
         this.reconnectAttempts = 0;
         this.maxReconnectAttempts = 5;
+        
+        // Heartbeat
+        this.heartbeatInterval = null;
+        this.heartbeatTimeout = null;
+        this.heartbeatFailures = 0;
         
         this.init();
     }
@@ -52,34 +62,68 @@ class MindfulTouchApp {
     connectWebSocket() {
         console.log('Connecting to WebSocket...');
         
+        // Close any existing connection
+        if (this.websocket) {
+            try {
+                if (this.websocket.readyState === WebSocket.OPEN || 
+                    this.websocket.readyState === WebSocket.CONNECTING) {
+                    this.websocket.close();
+                }
+            } catch (e) {
+                console.warn('Error closing existing WebSocket:', e);
+            }
+            this.websocket = null;
+        }
+        
         try {
+            console.log(`Connecting to WebSocket at ${this.wsUrl}...`);
             this.websocket = new WebSocket(this.wsUrl);
+            
+            // Set a timeout for initial connection
+            const connectionTimeout = setTimeout(() => {
+                if (this.websocket && this.websocket.readyState !== WebSocket.OPEN) {
+                    console.error('WebSocket connection timeout');
+                    this.websocket.close();
+                    this.showError('Connection timeout. Could not connect to detection service.');
+                }
+            }, 5000);
             
             this.websocket.onopen = () => {
                 console.log('WebSocket connected successfully');
+                clearTimeout(connectionTimeout);
                 this.reconnectAttempts = 0;
                 this.updateConnectionStatus(true);
+                
+                // Start heartbeat
+                this.startHeartbeat();
                 
                 // Send ping to test connection
                 this.sendWebSocketMessage({ type: 'ping' });
             };
             
             this.websocket.onmessage = (event) => {
+                // Reset failure counter on any message
+                this.heartbeatFailures = 0;
                 this.handleWebSocketMessage(event.data);
             };
             
-            this.websocket.onclose = () => {
-                console.log('WebSocket connection closed');
+            this.websocket.onclose = (event) => {
+                console.log(`WebSocket connection closed: Code ${event.code}, Reason: ${event.reason || 'No reason provided'}`);
+                clearTimeout(connectionTimeout);
                 this.updateConnectionStatus(false);
                 
                 // Only attempt reconnect if detection is running
                 if (this.isDetectionRunning) {
                     this.attemptReconnect();
                 }
+                
+                // Stop heartbeat
+                this.stopHeartbeat();
             };
             
             this.websocket.onerror = (error) => {
                 console.error('WebSocket error:', error);
+                clearTimeout(connectionTimeout);
                 this.updateConnectionStatus(false);
                 
                 // Show user-friendly error if initial connection fails
@@ -94,6 +138,45 @@ class MindfulTouchApp {
             this.showError('Failed to create WebSocket connection');
         }
     }
+    
+    // Heartbeat to keep connection alive
+    startHeartbeat() {
+        this.stopHeartbeat(); // Clear any existing interval
+        this.heartbeatFailures = 0;
+        
+        // Send ping every 10 seconds
+        this.heartbeatInterval = setInterval(() => {
+            if (this.websocket && this.websocket.readyState === WebSocket.OPEN) {
+                this.sendWebSocketMessage({ type: 'ping' });
+                
+                // Check for response within 5 seconds
+                this.heartbeatTimeout = setTimeout(() => {
+                    this.heartbeatFailures++;
+                    console.warn(`Heartbeat failed (${this.heartbeatFailures}/3)`);
+                    
+                    // If we miss 3 heartbeats, reconnect
+                    if (this.heartbeatFailures >= 3) {
+                        console.error('Multiple heartbeat failures, reconnecting...');
+                        if (this.websocket) {
+                            this.websocket.close();
+                        }
+                    }
+                }, 5000);
+            }
+        }, 10000);
+    }
+    
+    stopHeartbeat() {
+        if (this.heartbeatInterval) {
+            clearInterval(this.heartbeatInterval);
+            this.heartbeatInterval = null;
+        }
+        
+        if (this.heartbeatTimeout) {
+            clearTimeout(this.heartbeatTimeout);
+            this.heartbeatTimeout = null;
+        }
+    }
 
     sendWebSocketMessage(message) {
         if (this.websocket && this.websocket.readyState === WebSocket.OPEN) {
@@ -104,6 +187,13 @@ class MindfulTouchApp {
     }
 
     handleWebSocketMessage(data) {
+        // Reset heartbeat failure counter on any message from server
+        if (this.heartbeatTimeout) {
+            clearTimeout(this.heartbeatTimeout);
+            this.heartbeatTimeout = null;
+        }
+        this.heartbeatFailures = 0;
+        
         try {
             const message = JSON.parse(data);
             
@@ -147,12 +237,12 @@ class MindfulTouchApp {
             console.log('Testing Tauri connection...');
             const response = await invoke('greet', { name: 'Mindful Touch' });
             console.log('Tauri connection successful:', response);
-            this.updateConnectionStatus(true);
+            // Don't update connection status here - only WebSocket connection should show as "Connected"
         } catch (error) {
             console.error('Failed to connect to Tauri:', error);
             console.error('Error details:', error);
             console.error('Error type:', typeof error);
-            this.updateConnectionStatus(false);
+            // Don't update connection status to false either - this is just Tauri test
         }
     }
 
@@ -187,12 +277,20 @@ class MindfulTouchApp {
                 const result = await invoke('start_python_backend');
                 console.log('Python backend result:', result);
                 
-                // Connect to WebSocket after giving backend time to start
-                console.log('Waiting for backend to initialize...');
-                setTimeout(() => {
-                    console.log('Attempting WebSocket connection...');
-                    this.connectWebSocket();
-                }, 5000); // 5 seconds for backend startup
+                // Backend should be running and WebSocket server available now
+                console.log('Connecting to WebSocket...');
+                this.connectWebSocket();
+                
+                // Verify connection with health check
+                setTimeout(async () => {
+                    try {
+                        const health = await invoke('check_backend_health');
+                        console.log('Backend health check:', health);
+                    } catch (e) {
+                        console.warn('Backend health check failed:', e);
+                        // Still continue as the main WebSocket connection might work
+                    }
+                }, 2000);
                 
                 this.isDetectionRunning = true;
                 this.sessionStartTime = Date.now();
@@ -215,6 +313,9 @@ class MindfulTouchApp {
             this.isDetectionRunning = false;
             this.sessionStartTime = null;
             button.textContent = 'Start Detection';
+            
+            // Stop heartbeat
+            this.stopHeartbeat();
             
             // Close WebSocket connection
             if (this.websocket) {
