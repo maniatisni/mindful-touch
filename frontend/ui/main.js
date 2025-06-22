@@ -33,6 +33,10 @@ class MindfulTouchApp {
         this.heartbeatTimeout = null;
         this.heartbeatFailures = 0;
         
+        // Frame throttling disabled for real-time
+        this.lastFrameUpdate = 0;
+        this.frameThrottleMs = 0; // No throttling for real-time display
+        
         this.init();
     }
 
@@ -178,6 +182,10 @@ class MindfulTouchApp {
             switch (message.type) {
                 case 'detection_data':
                     this.onDetectionData(message.data);
+                    // Handle camera frame if present
+                    if (message.data.frame) {
+                        this.displayCameraFrame(message.data.frame);
+                    }
                     break;
                     
                 case 'region_toggle_response':
@@ -328,31 +336,83 @@ class MindfulTouchApp {
 
     updateCameraDisplay() {
         const placeholder = document.getElementById('camera-placeholder');
-        placeholder.innerHTML = `
-            <div class="camera-active">
-                <div class="camera-icon">🔴</div>
-                <p>Detection Active</p>
-                <div class="detection-status">
-                    <div class="status-item">
-                        <span class="status-label">Hands:</span>
-                        <span class="status-value" id="hands-status">Detecting...</span>
-                    </div>
-                    <div class="status-item">
-                        <span class="status-label">Face:</span>
-                        <span class="status-value" id="face-status">Detecting...</span>
-                    </div>
+        const cameraFeed = document.getElementById('camera-feed');
+        
+        // Hide placeholder and show camera feed
+        placeholder.style.display = 'none';
+        cameraFeed.style.display = 'block';
+        
+        // Add detection status overlay
+        const overlay = document.createElement('div');
+        overlay.id = 'detection-overlay';
+        overlay.style.cssText = `
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 10px;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 12px;
+            z-index: 10;
+        `;
+        overlay.innerHTML = `
+            <div class="detection-status">
+                <div class="status-item">
+                    <span class="status-label">Hands:</span>
+                    <span class="status-value" id="hands-status">Detecting...</span>
                 </div>
-                <button id="start-detection" class="primary-button">Stop Detection</button>
+                <div class="status-item">
+                    <span class="status-label">Face:</span>
+                    <span class="status-value" id="face-status">Detecting...</span>
+                </div>
             </div>
         `;
         
-        // Re-attach event listener to new button
-        const newButton = document.getElementById('start-detection');
-        newButton.addEventListener('click', () => this.toggleDetection());
+        // Create stop button separately with proper styling
+        const stopButton = document.createElement('button');
+        stopButton.id = 'stop-detection-btn';
+        stopButton.className = 'primary-button';
+        stopButton.textContent = 'Stop Detection';
+        stopButton.style.cssText = `
+            margin-top: 10px;
+            background: #ef4444;
+            border: none;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+        `;
+        
+        // Add event listener before appending
+        stopButton.addEventListener('click', () => {
+            console.log('Stop button clicked');
+            this.toggleDetection();
+        });
+        
+        overlay.appendChild(stopButton);
+        
+        const cameraContainer = document.querySelector('.camera-container');
+        cameraContainer.style.position = 'relative';
+        cameraContainer.appendChild(overlay);
     }
 
     resetCameraDisplay() {
         const placeholder = document.getElementById('camera-placeholder');
+        const cameraFeed = document.getElementById('camera-feed');
+        const overlay = document.getElementById('detection-overlay');
+        
+        // Show placeholder and hide camera feed
+        placeholder.style.display = 'block';
+        cameraFeed.style.display = 'none';
+        
+        // Remove overlay if it exists
+        if (overlay) {
+            overlay.remove();
+        }
+        
         placeholder.innerHTML = `
             <div class="camera-icon">📹</div>
             <p>Camera feed will appear here</p>
@@ -362,6 +422,35 @@ class MindfulTouchApp {
         // Re-attach event listener
         const button = document.getElementById('start-detection');
         button.addEventListener('click', () => this.toggleDetection());
+    }
+
+    displayCameraFrame(frameBase64) {
+        const cameraFeed = document.getElementById('camera-feed');
+        if (cameraFeed && this.isDetectionRunning) {
+            // Use more efficient image loading with object URL
+            try {
+                // Convert base64 to blob for better performance
+                const byteCharacters = atob(frameBase64);
+                const byteNumbers = new Array(byteCharacters.length);
+                for (let i = 0; i < byteCharacters.length; i++) {
+                    byteNumbers[i] = byteCharacters.charCodeAt(i);
+                }
+                const byteArray = new Uint8Array(byteNumbers);
+                const blob = new Blob([byteArray], { type: 'image/jpeg' });
+                
+                // Revoke previous object URL to prevent memory leaks
+                if (cameraFeed.src && cameraFeed.src.startsWith('blob:')) {
+                    URL.revokeObjectURL(cameraFeed.src);
+                }
+                
+                // Set new object URL
+                cameraFeed.src = URL.createObjectURL(blob);
+            } catch (error) {
+                console.warn('Failed to update camera frame:', error);
+                // Fallback to base64
+                cameraFeed.src = `data:image/jpeg;base64,${frameBase64}`;
+            }
+        }
     }
 
     updateSessionTimer() {
@@ -428,9 +517,49 @@ class MindfulTouchApp {
                 faceStatus.textContent = data.face_detected ? 'Detected ✓' : 'Not detected ✗';
                 faceStatus.style.color = data.face_detected ? '#10b981' : '#ef4444';
             }
+            
+            // Update detection overlay with contact and alert information
+            const overlay = document.getElementById('detection-overlay');
+            if (overlay) {
+                this.updateDetectionOverlay(overlay, data);
+            }
         }
         
         this.updateUI();
+    }
+    
+    updateDetectionOverlay(overlay, data) {
+        // Add contact points and alert information to overlay
+        const contactInfo = overlay.querySelector('.contact-info') || document.createElement('div');
+        contactInfo.className = 'contact-info';
+        contactInfo.style.cssText = 'margin-top: 8px; font-size: 11px;';
+        
+        const contactCount = data.contact_points || 0;
+        const alertsActive = data.alerts_active || [];
+        
+        contactInfo.innerHTML = `
+            <div style="color: ${contactCount > 0 ? '#ef4444' : '#10b981'};">
+                Contacts: ${contactCount}
+            </div>
+            ${alertsActive.length > 0 ? 
+                `<div style="color: #ef4444; font-weight: bold;">
+                    ⚠️ Alert: ${alertsActive.join(', ')}
+                </div>` : 
+                '<div style="color: #10b981;">No alerts</div>'
+            }
+        `;
+        
+        if (!overlay.querySelector('.contact-info')) {
+            overlay.appendChild(contactInfo);
+        }
+        
+        // Add visual flash effect for alerts
+        if (alertsActive.length > 0) {
+            overlay.style.backgroundColor = 'rgba(239, 68, 68, 0.9)';
+            setTimeout(() => {
+                overlay.style.backgroundColor = 'rgba(0, 0, 0, 0.8)';
+            }, 200);
+        }
     }
 }
 

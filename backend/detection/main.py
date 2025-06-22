@@ -4,6 +4,7 @@ Gentle awareness tool for mindful hand movement tracking
 """
 
 import argparse
+import base64
 
 import cv2
 
@@ -100,7 +101,9 @@ def run_headless_mode(cap, detector, verbose=False):
 
     for attempt in range(max_port_attempts):
         try:
-            logger.info(f"Attempting to start WebSocket server on port {port} (attempt {attempt + 1}/{max_port_attempts})")
+            logger.info(
+                f"Attempting to start WebSocket server on port {port} (attempt {attempt + 1}/{max_port_attempts})"
+            )
             ws_server = DetectionWebSocketServer(port=port)
             ws_server.run_in_thread()
             # If we get here, the server started successfully
@@ -137,9 +140,9 @@ def run_headless_mode(cap, detector, verbose=False):
             # Check for region toggle requests from WebSocket
             toggle_request = ws_server.get_region_toggle_sync()
             if toggle_request:
-                region = toggle_request.get('region')
-                enabled = toggle_request.get('enabled')
-                
+                region = toggle_request.get("region")
+                enabled = toggle_request.get("enabled")
+
                 if enabled:
                     if region not in Config.ACTIVE_REGIONS:
                         Config.ACTIVE_REGIONS.append(region)
@@ -149,18 +152,52 @@ def run_headless_mode(cap, detector, verbose=False):
                         Config.ACTIVE_REGIONS.remove(region)
                         logger.info(f"Region '{region}' disabled")
 
-            # Send detection data via WebSocket every 3 frames
+            # Send frames only if clients are connected to avoid processing overhead
             frame_count += 1
-            if frame_count % 3 == 0:
-                detection_output = {"timestamp": time.time(), "active_regions": Config.ACTIVE_REGIONS, **detection_data}
-                ws_server.update_detection_data(detection_output)
-                if verbose and frame_count % 30 == 0:  # Log every ~30 frames when verbose
-                    logger.debug(
-                        f"Detection data sent: {len(Config.ACTIVE_REGIONS)} active regions, {detection_data.get('contact_points', 0)} contact points"
-                    )
+            
+            if len(ws_server.clients) > 0:
+                # Send every 2nd frame to reduce load while maintaining smoothness
+                if frame_count % 2 == 0:
+                    # Drastically reduce frame size for real-time streaming
+                    height, width = frame.shape[:2]
+                    new_width = min(width, 320)  # Much smaller for real-time
+                    new_height = int(height * (new_width / width))
+                    resized_frame = cv2.resize(frame, (new_width, new_height))
 
-            # Small delay to prevent overwhelming the system
-            time.sleep(0.05)
+                    # Use very aggressive compression for speed
+                    encode_params = [
+                        cv2.IMWRITE_JPEG_QUALITY, 30,  # Very low quality
+                        cv2.IMWRITE_JPEG_PROGRESSIVE, 1,  # Progressive JPEG
+                        cv2.IMWRITE_JPEG_OPTIMIZE, 1  # Optimize Huffman tables
+                    ]
+                    _, buffer = cv2.imencode(".jpg", resized_frame, encode_params)
+                    frame_base64 = base64.b64encode(buffer).decode("utf-8")
+
+                    detection_output = {
+                        "timestamp": time.time(),
+                        "active_regions": Config.ACTIVE_REGIONS,
+                        "frame": frame_base64,
+                        **detection_data,
+                    }
+                    ws_server.update_detection_data(detection_output)
+                else:
+                    # Send detection data without frame for better responsiveness
+                    detection_output = {
+                        "timestamp": time.time(),
+                        "active_regions": Config.ACTIVE_REGIONS,
+                        **detection_data,
+                    }
+                    ws_server.update_detection_data(detection_output)
+            else:
+                # No clients connected, just process detection data
+                pass
+                
+            if verbose and frame_count % 60 == 0:  # Log every ~60 frames when verbose
+                logger.debug(
+                    f"Frame {frame_count}: {len(ws_server.clients)} clients, {len(Config.ACTIVE_REGIONS)} active regions, {detection_data.get('contact_points', 0)} contact points"
+                )
+
+            # No artificial delay for real-time performance
 
     except KeyboardInterrupt:
         logger.info("Detection service interrupted by keyboard")
@@ -271,7 +308,15 @@ def _draw_status_overlay(frame, detection_data):
 
     # Active regions
     active_regions = ", ".join(Config.ACTIVE_REGIONS) if Config.ACTIVE_REGIONS else "None"
-    cv2.putText(frame, f"Active: {active_regions[:20]}", (width - 270, y_offset + 2 * line_height), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 255, 255), 1)
+    cv2.putText(
+        frame,
+        f"Active: {active_regions[:20]}",
+        (width - 270, y_offset + 2 * line_height),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.4,
+        (0, 255, 255),
+        1,
+    )
 
     # Contact points
     contact_color = (0, 0, 255) if detection_data["contact_points"] > 0 else (255, 255, 255)
@@ -288,10 +333,26 @@ def _draw_status_overlay(frame, detection_data):
     # Alert status
     alerts = ", ".join(detection_data["alerts_active"]) if detection_data["alerts_active"] else "None"
     alert_color = (0, 0, 255) if detection_data["alerts_active"] else (255, 255, 255)
-    cv2.putText(frame, f"Alerts: {alerts[:15]}", (width - 270, y_offset + 4 * line_height), cv2.FONT_HERSHEY_SIMPLEX, 0.5, alert_color, 1)
+    cv2.putText(
+        frame,
+        f"Alerts: {alerts[:15]}",
+        (width - 270, y_offset + 4 * line_height),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.5,
+        alert_color,
+        1,
+    )
 
     # Controls reminder
-    cv2.putText(frame, "s/e/y/m/b = toggle regions", (width - 270, y_offset + 6 * line_height), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (128, 128, 128), 1)
+    cv2.putText(
+        frame,
+        "s/e/y/m/b = toggle regions",
+        (width - 270, y_offset + 6 * line_height),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.4,
+        (128, 128, 128),
+        1,
+    )
 
 
 if __name__ == "__main__":
