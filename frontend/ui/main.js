@@ -71,17 +71,27 @@ class MindfulTouchApp {
             this.websocket.onclose = () => {
                 console.log('WebSocket connection closed');
                 this.updateConnectionStatus(false);
-                this.attemptReconnect();
+                
+                // Only attempt reconnect if detection is running
+                if (this.isDetectionRunning) {
+                    this.attemptReconnect();
+                }
             };
             
             this.websocket.onerror = (error) => {
                 console.error('WebSocket error:', error);
                 this.updateConnectionStatus(false);
+                
+                // Show user-friendly error if initial connection fails
+                if (this.reconnectAttempts === 0) {
+                    this.showError('Could not connect to detection service. Make sure the backend is running.');
+                }
             };
             
         } catch (error) {
             console.error('Failed to create WebSocket connection:', error);
             this.updateConnectionStatus(false);
+            this.showError('Failed to create WebSocket connection');
         }
     }
 
@@ -177,10 +187,12 @@ class MindfulTouchApp {
                 const result = await invoke('start_python_backend');
                 console.log('Python backend result:', result);
                 
-                // Connect to WebSocket after a short delay
+                // Connect to WebSocket after giving backend time to start
+                console.log('Waiting for backend to initialize...');
                 setTimeout(() => {
+                    console.log('Attempting WebSocket connection...');
                     this.connectWebSocket();
-                }, 2000);
+                }, 5000); // 5 seconds for backend startup
                 
                 this.isDetectionRunning = true;
                 this.sessionStartTime = Date.now();
@@ -208,6 +220,15 @@ class MindfulTouchApp {
             if (this.websocket) {
                 this.websocket.close();
                 this.websocket = null;
+            }
+            
+            // Stop Python backend
+            try {
+                console.log('Stopping Python backend...');
+                const result = await invoke('stop_python_backend');
+                console.log('Backend stop result:', result);
+            } catch (error) {
+                console.error('Failed to stop backend:', error);
             }
             
             // Reset camera display
