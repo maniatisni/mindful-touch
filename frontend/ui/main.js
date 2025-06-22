@@ -3,17 +3,11 @@
 let invoke;
 if (window.__TAURI__ && window.__TAURI__.core) {
     invoke = window.__TAURI__.core.invoke;
-    console.log('Tauri API found');
 } else if (window.__TAURI__ && window.__TAURI__.tauri) {
-    // Fallback for older Tauri versions
     invoke = window.__TAURI__.tauri.invoke;
-    console.log('Tauri API found (legacy)');
 } else {
-    console.error('Tauri API not found');
-    console.log('Available window.__TAURI__:', window.__TAURI__);
     // Fallback function for testing
     invoke = async (cmd, args) => {
-        console.log(`Mock invoke: ${cmd}`, args);
         return `Mock response for ${cmd}`;
     };
 }
@@ -43,10 +37,6 @@ class MindfulTouchApp {
     }
 
     async init() {
-        console.log('Initializing Mindful Touch App...');
-        console.log('Window.__TAURI__ available:', !!window.__TAURI__);
-        console.log('Window.__TAURI__.tauri available:', !!(window.__TAURI__ && window.__TAURI__.tauri));
-        
         // Set up event listeners
         this.setupEventListeners();
         
@@ -60,8 +50,6 @@ class MindfulTouchApp {
     }
 
     connectWebSocket() {
-        console.log('Connecting to WebSocket...');
-        
         // Close any existing connection
         if (this.websocket) {
             try {
@@ -70,26 +58,23 @@ class MindfulTouchApp {
                     this.websocket.close();
                 }
             } catch (e) {
-                console.warn('Error closing existing WebSocket:', e);
+                // Ignore close errors
             }
             this.websocket = null;
         }
         
         try {
-            console.log(`Connecting to WebSocket at ${this.wsUrl}...`);
             this.websocket = new WebSocket(this.wsUrl);
             
             // Set a timeout for initial connection
             const connectionTimeout = setTimeout(() => {
                 if (this.websocket && this.websocket.readyState !== WebSocket.OPEN) {
-                    console.error('WebSocket connection timeout');
                     this.websocket.close();
                     this.showError('Connection timeout. Could not connect to detection service.');
                 }
             }, 5000);
             
             this.websocket.onopen = () => {
-                console.log('WebSocket connected successfully');
                 clearTimeout(connectionTimeout);
                 this.reconnectAttempts = 0;
                 this.updateConnectionStatus(true);
@@ -108,7 +93,6 @@ class MindfulTouchApp {
             };
             
             this.websocket.onclose = (event) => {
-                console.log(`WebSocket connection closed: Code ${event.code}, Reason: ${event.reason || 'No reason provided'}`);
                 clearTimeout(connectionTimeout);
                 this.updateConnectionStatus(false);
                 
@@ -122,7 +106,6 @@ class MindfulTouchApp {
             };
             
             this.websocket.onerror = (error) => {
-                console.error('WebSocket error:', error);
                 clearTimeout(connectionTimeout);
                 this.updateConnectionStatus(false);
                 
@@ -133,7 +116,6 @@ class MindfulTouchApp {
             };
             
         } catch (error) {
-            console.error('Failed to create WebSocket connection:', error);
             this.updateConnectionStatus(false);
             this.showError('Failed to create WebSocket connection');
         }
@@ -152,11 +134,9 @@ class MindfulTouchApp {
                 // Check for response within 5 seconds
                 this.heartbeatTimeout = setTimeout(() => {
                     this.heartbeatFailures++;
-                    console.warn(`Heartbeat failed (${this.heartbeatFailures}/3)`);
                     
                     // If we miss 3 heartbeats, reconnect
                     if (this.heartbeatFailures >= 3) {
-                        console.error('Multiple heartbeat failures, reconnecting...');
                         if (this.websocket) {
                             this.websocket.close();
                         }
@@ -181,8 +161,6 @@ class MindfulTouchApp {
     sendWebSocketMessage(message) {
         if (this.websocket && this.websocket.readyState === WebSocket.OPEN) {
             this.websocket.send(JSON.stringify(message));
-        } else {
-            console.warn('WebSocket not connected, cannot send message:', message);
         }
     }
 
@@ -203,46 +181,36 @@ class MindfulTouchApp {
                     break;
                     
                 case 'region_toggle_response':
-                    console.log('Region toggle confirmed:', message.region, message.enabled);
                     break;
                     
                 case 'pong':
-                    console.log('WebSocket ping successful');
                     break;
                     
                 default:
-                    console.log('Unknown WebSocket message:', message);
+                    break;
             }
         } catch (error) {
-            console.error('Failed to parse WebSocket message:', error);
+            // Ignore message parsing errors
         }
     }
 
     attemptReconnect() {
         if (this.reconnectAttempts < this.maxReconnectAttempts) {
             this.reconnectAttempts++;
-            console.log(`Attempting to reconnect (${this.reconnectAttempts}/${this.maxReconnectAttempts})...`);
             
             setTimeout(() => {
                 this.connectWebSocket();
             }, 2000 * this.reconnectAttempts); // Exponential backoff
         } else {
-            console.error('Max reconnection attempts reached');
             this.showError('Lost connection to detection service');
         }
     }
 
     async testTauriConnection() {
         try {
-            console.log('Testing Tauri connection...');
-            const response = await invoke('greet', { name: 'Mindful Touch' });
-            console.log('Tauri connection successful:', response);
-            // Don't update connection status here - only WebSocket connection should show as "Connected"
+            await invoke('greet', { name: 'Mindful Touch' });
         } catch (error) {
-            console.error('Failed to connect to Tauri:', error);
-            console.error('Error details:', error);
-            console.error('Error type:', typeof error);
-            // Don't update connection status to false either - this is just Tauri test
+            // Tauri connection test failed - ignore for now
         }
     }
 
@@ -263,32 +231,25 @@ class MindfulTouchApp {
     }
 
     async toggleDetection() {
-        console.log('Toggle detection called');
         const button = document.getElementById('start-detection');
         
         if (!this.isDetectionRunning) {
             try {
-                console.log('Starting detection...');
                 button.textContent = 'Starting...';
                 button.disabled = true;
                 
                 // Start Python backend
-                console.log('Calling start_python_backend...');
-                const result = await invoke('start_python_backend');
-                console.log('Python backend result:', result);
+                await invoke('start_python_backend');
                 
                 // Backend should be running and WebSocket server available now
-                console.log('Connecting to WebSocket...');
                 this.connectWebSocket();
                 
                 // Verify connection with health check
                 setTimeout(async () => {
                     try {
-                        const health = await invoke('check_backend_health');
-                        console.log('Backend health check:', health);
+                        await invoke('check_backend_health');
                     } catch (e) {
-                        console.warn('Backend health check failed:', e);
-                        // Still continue as the main WebSocket connection might work
+                        // Health check failed - continue anyway
                     }
                 }, 2000);
                 
@@ -300,16 +261,12 @@ class MindfulTouchApp {
                 // Update camera placeholder
                 this.updateCameraDisplay();
                 
-                console.log('Detection started successfully');
             } catch (error) {
-                console.error('Failed to start detection:', error);
-                console.error('Error details:', error);
                 button.textContent = 'Start Detection';
                 button.disabled = false;
                 this.showError(`Failed to start detection: ${error.message || error}`);
             }
         } else {
-            console.log('Stopping detection...');
             this.isDetectionRunning = false;
             this.sessionStartTime = null;
             button.textContent = 'Start Detection';
@@ -325,24 +282,18 @@ class MindfulTouchApp {
             
             // Stop Python backend
             try {
-                console.log('Stopping Python backend...');
-                const result = await invoke('stop_python_backend');
-                console.log('Backend stop result:', result);
+                await invoke('stop_python_backend');
             } catch (error) {
-                console.error('Failed to stop backend:', error);
+                // Ignore stop errors
             }
             
             // Reset camera display
             this.resetCameraDisplay();
-            
-            console.log('Detection stopped');
         }
     }
 
     async toggleRegion(region, enabled) {
         try {
-            console.log(`Toggling region ${region}: ${enabled}`);
-            
             // Send via WebSocket if connected
             if (this.websocket && this.websocket.readyState === WebSocket.OPEN) {
                 this.sendWebSocketMessage({
@@ -350,8 +301,6 @@ class MindfulTouchApp {
                     region: region,
                     enabled: enabled
                 });
-            } else {
-                console.warn('WebSocket not connected, region toggle may not work');
             }
             
             // Update UI to reflect change immediately
@@ -362,7 +311,7 @@ class MindfulTouchApp {
             }
             
         } catch (error) {
-            console.error('Failed to toggle region:', error);
+            // Ignore toggle errors
         }
     }
 
@@ -459,8 +408,6 @@ class MindfulTouchApp {
 
     // Method to receive detection data from WebSocket
     onDetectionData(data) {
-        console.log('Received detection data:', data);
-        
         // Update detection statistics
         if (data.alerts_active && data.alerts_active.length > 0) {
             this.statistics.totalDetections++;

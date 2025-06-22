@@ -7,7 +7,6 @@ import json
 import logging
 import socket
 import threading
-import time
 from typing import Any, Dict, Set
 
 import websockets
@@ -28,7 +27,7 @@ class DetectionWebSocketServer:
         # Shared state between detection thread and WebSocket server
         self.latest_detection_data = {}
         self.region_toggles = asyncio.Queue()
-        
+
     def is_port_in_use(self):
         """Check if the port is already in use"""
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -75,13 +74,13 @@ class DetectionWebSocketServer:
         # Create a copy of clients to avoid modification during iteration
         clients_copy = self.clients.copy()
         client_count = len(clients_copy)
-        
+
         if client_count > 0:
             logger.debug(f"Broadcasting to {client_count} clients")
-            
+
         # Send to all clients concurrently
         results = await asyncio.gather(*[self.send_to_client(client, message) for client in clients_copy], return_exceptions=True)
-        
+
         # Count successful sends
         successful = sum(1 for r in results if r is True)
         if successful < client_count:
@@ -120,7 +119,7 @@ class DetectionWebSocketServer:
         """Handle individual client connections"""
         client_id = id(websocket)
         logger.info(f"New client connection: {client_id}")
-        
+
         await self.register_client(websocket)
 
         try:
@@ -214,7 +213,7 @@ class DetectionWebSocketServer:
 
         thread = threading.Thread(target=run_server, daemon=True)
         thread.start()
-        
+
         # Wait for server to start (with timeout)
         server_start_timeout = 10  # seconds
         if not self.ready_event.wait(timeout=server_start_timeout):
@@ -223,5 +222,5 @@ class DetectionWebSocketServer:
             # This is important as the server might be running but just slow to signal
         elif self.running:
             logger.info("WebSocket server confirmed ready within timeout period")
-        
+
         return thread

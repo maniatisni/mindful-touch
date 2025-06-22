@@ -22,18 +22,20 @@ def main():
 
     # Configure logging level
     import logging
+
     log_level = logging.DEBUG if args.verbose else logging.INFO
-    logging.basicConfig(level=log_level, format='%(asctime)s - %(levelname)s - %(message)s')
+    logging.basicConfig(level=log_level, format="%(asctime)s - %(levelname)s - %(message)s")
     logger = logging.getLogger(__name__)
 
     if args.verbose:
         logger.info("Mindful Touch - Multi-Region Detection")
         logger.info(f"Mode: {'Headless' if args.headless else 'GUI'}")
         logger.info(f"Active regions: {', '.join(Config.ACTIVE_REGIONS)}")
-        
+
         # Print paths to help debug import issues in production
-        import sys
         import os
+        import sys
+
         logger.debug(f"Python executable: {sys.executable}")
         logger.debug(f"Current working directory: {os.getcwd()}")
         logger.debug(f"Python path: {sys.path}")
@@ -67,21 +69,22 @@ def main():
 def run_headless_mode(cap, detector, verbose=False):
     """Run detection without GUI - WebSocket mode for Tauri"""
     import logging
-    import time
     import os
+    import time
 
     from ..server import DetectionWebSocketServer
 
     # Set up logging
     log_level = logging.DEBUG if verbose else logging.INFO
-    logging.basicConfig(level=log_level, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    logging.basicConfig(level=log_level, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
     logger = logging.getLogger(__name__)
-    
+
     # Print additional debug info
     if verbose:
         logger.debug(f"Current working directory: {os.getcwd()}")
         logger.debug(f"Process ID: {os.getpid()}")
         import platform
+
         logger.debug(f"Platform: {platform.platform()}")
         logger.debug(f"Python version: {platform.python_version()}")
 
@@ -94,23 +97,23 @@ def run_headless_mode(cap, detector, verbose=False):
     port = 8765
     max_port_attempts = 5
     ws_server = None
-    
+
     for attempt in range(max_port_attempts):
         try:
-            logger.info(f"Attempting to start WebSocket server on port {port} (attempt {attempt+1}/{max_port_attempts})")
+            logger.info(f"Attempting to start WebSocket server on port {port} (attempt {attempt + 1}/{max_port_attempts})")
             ws_server = DetectionWebSocketServer(port=port)
-            ws_server_thread = ws_server.run_in_thread()
+            ws_server.run_in_thread()
             # If we get here, the server started successfully
             logger.info(f"WebSocket server started on port {port}")
             break
         except Exception as e:
             logger.warning(f"Failed to start WebSocket server on port {port}: {e}")
             port += 1
-            
+
     if ws_server is None:
         logger.error(f"Failed to start WebSocket server after {max_port_attempts} attempts")
         return
-    
+
     # Log whether the server is ready
     if ws_server.ready_event.is_set():
         logger.info("WebSocket server is ready and running")
@@ -141,7 +144,9 @@ def run_headless_mode(cap, detector, verbose=False):
                 detection_output = {"timestamp": time.time(), "active_regions": Config.ACTIVE_REGIONS, **detection_data}
                 ws_server.update_detection_data(detection_output)
                 if verbose and frame_count % 30 == 0:  # Log every ~30 frames when verbose
-                    logger.debug(f"Detection data sent: {len(Config.ACTIVE_REGIONS)} active regions, {detection_data.get('contact_points', 0)} contact points")
+                    logger.debug(
+                        f"Detection data sent: {len(Config.ACTIVE_REGIONS)} active regions, {detection_data.get('contact_points', 0)} contact points"
+                    )
 
             # Small delay to prevent overwhelming the system
             time.sleep(0.05)
