@@ -118,7 +118,6 @@ def run_headless_mode(cap, detector, verbose=False):
 
     # Threading setup
     frame_queue = queue.Queue(maxsize=2)  # Small queue to prevent lag
-    detection_queue = queue.Queue(maxsize=5)
     shutdown_event = threading.Event()
 
     # Create thread pool for frame processing (increased for high quality)
@@ -195,7 +194,7 @@ def run_headless_mode(cap, detector, verbose=False):
                         try:
                             frame_base64 = future_encoding.result(timeout=0.1)  # Shorter timeout for better responsiveness
                             detection_output["frame"] = frame_base64
-                        except:
+                        except Exception:
                             pass  # Skip frame if encoding takes too long
 
                     ws_server.update_detection_data(detection_output)

@@ -54,7 +54,7 @@ async fn start_python_backend() -> Result<String, String> {
         }
         
         let mut cmd = Command::new("uv");
-        cmd.args(&["run", "python", "-m", "backend.detection.main", "--headless"])
+        cmd.args(["run", "python", "-m", "backend.detection.main", "--headless"])
             .current_dir(path)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
@@ -150,12 +150,9 @@ fn main() {
         .setup(|app| {
             let window = app.get_webview_window("main").unwrap();
             window.on_window_event(move |event| {
-                match event {
-                    tauri::WindowEvent::CloseRequested { .. } => {
-                        // Clean up Python backend process when window is closing
-                        let _ = cleanup_python_process();
-                    }
-                    _ => {}
+                if let tauri::WindowEvent::CloseRequested { .. } = event {
+                    // Clean up Python backend process when window is closing
+                    let _ = cleanup_python_process();
                 }
             });
             Ok(())
