@@ -6,7 +6,6 @@ Integration tests for WebSocket communication between detection backend and fron
 import asyncio
 import json
 import logging
-import os
 import subprocess
 import sys
 import time
@@ -145,7 +144,9 @@ class TestWebSocketServer:
         uri = f"ws://localhost:{websocket_server.test_port}"
 
         # Connect multiple clients
-        async with websockets.connect(uri) as client1, websockets.connect(uri) as client2, websockets.connect(uri) as client3:
+        async with websockets.connect(uri) as client1, websockets.connect(uri) as client2, websockets.connect(
+            uri
+        ) as client3:
             # Send detection data
             mock_data = {
                 "timestamp": time.time(),
@@ -252,7 +253,13 @@ class TestErrorHandlingAndEdgeCases:
 # Pytest configuration and markers
 def test_backend_startup_command():
     """Test that the backend command can be invoked (non-async test)"""
-    result = subprocess.run([sys.executable, "-m", "backend.detection.main", "--help"], cwd=project_root, capture_output=True, text=True, timeout=10)
+    result = subprocess.run(
+        [sys.executable, "-m", "backend.detection.main", "--help"],
+        cwd=project_root,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
 
     assert result.returncode == 0, f"Command failed: {result.stderr}"
     assert "Mindful Touch" in result.stdout
