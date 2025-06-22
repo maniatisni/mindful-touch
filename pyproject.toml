@@ -31,11 +31,16 @@ dependencies = [
     "mediapipe>=0.10.0",
     "numpy>=1.21.0",
     "ruff>=0.1.0",
+    "websockets>=12.0",
+    "asyncio>=3.4.3",
+    "pytest>=8.0",
+    "pytest-asyncio>=0.21.0",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",
+    "pytest-asyncio>=0.21.0",
     "pytest-cov>=4.0.0",
     "black>=23.0.0",
     "isort>=5.12.0",
@@ -58,7 +63,7 @@ linux = [
 ]
 
 [project.scripts]
-mindful-touch = "mindful_touch.main:main"
+mindful-touch = "backend.detection.main:main"
 
 [project.urls]
 Homepage = "https://github.com/maniatisni/mindful-touch"
@@ -66,7 +71,7 @@ Repository = "https://github.com/maniatisni/mindful-touch"
 Issues = "https://github.com/maniatisni/mindful-touch/issues"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/mindful_touch"]
+packages = ["backend"]
 
 [tool.black]
 line-length = 88
@@ -108,14 +113,17 @@ python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = [
-    "--cov=src/mindful_touch",
-    "--cov-report=term-missing",
-    "--cov-report=html",
+    "--tb=short",
+    "-v",
 ]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 
 [dependency-groups]
 dev = [
     "ipykernel>=6.29.5",
+    "pytest>=8.3.5",
+    "pytest-asyncio>=0.24.0",
 ]
 
 

@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Mindful Touch</title>
+    <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+    <div class="app">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo">
+                <img src="logo.png" alt="Mindful Touch" />
+                <h1>Mindful Touch</h1>
+            </div>
+            <div class="status">
+                <span id="connection-status" class="status-indicator offline">Offline</span>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main">
+            <!-- Detection Controls -->
+            <section class="detection-panel">
+                <h2>Detection Regions</h2>
+                <div class="region-controls">
+                    <div class="region-toggle">
+                        <label class="switch">
+                            <input type="checkbox" id="scalp-toggle" checked>
+                            <span class="slider"></span>
+                        </label>
+                        <span class="region-label">Scalp</span>
+                    </div>
+                    
+                    <div class="region-toggle">
+                        <label class="switch">
+                            <input type="checkbox" id="eyebrows-toggle">
+                            <span class="slider"></span>
+                        </label>
+                        <span class="region-label">Eyebrows</span>
+                    </div>
+                    
+                    <div class="region-toggle">
+                        <label class="switch">
+                            <input type="checkbox" id="eyes-toggle">
+                            <span class="slider"></span>
+                        </label>
+                        <span class="region-label">Eyes</span>
+                    </div>
+                    
+                    <div class="region-toggle">
+                        <label class="switch">
+                            <input type="checkbox" id="mouth-toggle">
+                            <span class="slider"></span>
+                        </label>
+                        <span class="region-label">Mouth</span>
+                    </div>
+                    
+                    <div class="region-toggle">
+                        <label class="switch">
+                            <input type="checkbox" id="beard-toggle">
+                            <span class="slider"></span>
+                        </label>
+                        <span class="region-label">Beard</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Camera Feed -->
+            <section class="camera-panel">
+                <h2>Live Detection</h2>
+                <div class="camera-container">
+                    <div id="camera-placeholder">
+                        <div class="camera-icon">📹</div>
+                        <p>Camera feed will appear here</p>
+                        <button id="start-detection" class="primary-button">Start Detection</button>
+                    </div>
+                    <img id="camera-feed" style="display: none; width: 100%; height: auto; border-radius: 8px;" alt="Live camera feed" />
+                </div>
+            </section>
+
+            <!-- Analytics -->
+            <section class="analytics-panel">
+                <h2>Today's Activity</h2>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-number" id="total-detections">0</div>
+                        <div class="stat-label">Detections</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" id="session-duration">0m</div>
+                        <div class="stat-label">Session</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" id="most-active-region">None</div>
+                        <div class="stat-label">Most Active</div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script type="module" src="main.js"></script>
+</body>
+</html>

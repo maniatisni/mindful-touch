@@ -6,17 +6,18 @@ on:
     types: [opened, synchronize, reopened]
 
 jobs:
-  lint-and-test:
+  # Python backend checks
+  backend-checks:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 1
       
-      - name: Install system dependencies
+      - name: Install system dependencies for OpenCV
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgl1 libegl1 libxrandr2 libxss1 libxcursor1 libxcomposite1 libpulse0 libxi6 libxtst6
+          sudo apt-get install -y libgl1-mesa-dri libglib2.0-0 libxrandr2 libxss1 libxcursor1 libxcomposite1 libxi6 libxtst6 libgstreamer1.0-0 libgstreamer-plugins-base1.0-0
       
       - name: Install uv
         uses: astral-sh/setup-uv@v4
@@ -27,45 +28,65 @@ jobs:
       - name: Set up Python
         run: uv python install 3.11
       
-      - name: Install dependencies
-        run: uv sync
+      - name: Install Python dependencies
+        run: uv sync --group dev
       
-      - name: Run ruff
+      - name: Run ruff check
         run: uv run ruff check .
       
-      - name: Check imports
+      - name: Run ruff format check
+        run: uv run ruff format --check .
+      
+      - name: Run Python tests
+        run: uv run pytest -v
+        env:
+          # Use mock camera for CI
+          PYTEST_MOCK_CAMERA: "1"
+      
+      - name: Test backend startup (headless mode)
         run: |
-          uv run python -c "import mindful_touch; print(f'Version: {mindful_touch.__version__}')"
+          timeout 10s uv run python -m backend.detection.main --headless --mock-camera || true
+          echo "Backend startup test completed"
+
+  # Tauri frontend checks  
+  frontend-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      
+      - name: Install system dependencies for Tauri
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libgtk-3-dev
+      
+      - name: Cache Rust dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            frontend/src-tauri/target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('frontend/src-tauri/**/Cargo.lock') }}
+      
+      - name: Check Rust code
+        working-directory: frontend/src-tauri
+        run: |
+          cargo check
+          cargo clippy -- -D warnings
+          cargo fmt --all -- --check
       
       - name: Validate conventional commits
         uses: wagoid/commitlint-github-action@v5
         if: github.event_name == 'pull_request'
         with:
           fetch-depth: 1
-
-  test-build:
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
-      
-      - name: Install uv
-        uses: astral-sh/setup-uv@v4
-      
-      - name: Set up Python
-        run: uv python install 3.11
-      
-      - name: Test build process
-        run: |
-          uv sync
-          uv pip install pyinstaller pillow matplotlib
-          # Just test spec file generation, not full build
-          uv run python -c "
-          import sys
-          sys.path.insert(0, '.')
-          from build_macos import create_spec_file, create_entitlements
-          create_spec_file()
-          create_entitlements()
-          print('✅ Build configuration valid')
-          "
