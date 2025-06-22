@@ -74,7 +74,7 @@ class MindfulTouchApp {
             const connectionTimeout = setTimeout(() => {
                 if (this.websocket && this.websocket.readyState !== WebSocket.OPEN) {
                     this.websocket.close();
-                    this.showError('Connection timeout. Could not connect to detection service.');
+                    this.showError('Connection timeout. Please try again.');
                 }
             }, 5000);
             
@@ -88,6 +88,13 @@ class MindfulTouchApp {
                 
                 // Send ping to test connection
                 this.sendWebSocketMessage({ type: 'ping' });
+                
+                // Update button text if still showing connecting
+                const button = document.getElementById('start-detection');
+                if (button && button.textContent === 'Connecting...') {
+                    button.textContent = 'Stop Detection';
+                    button.disabled = false;
+                }
             };
             
             this.websocket.onmessage = (event) => {
@@ -115,7 +122,17 @@ class MindfulTouchApp {
                 
                 // Show user-friendly error if initial connection fails
                 if (this.reconnectAttempts === 0) {
-                    this.showError('Could not connect to detection service. Make sure the backend is running.');
+                    this.showError('Could not connect to detection service.');
+                    
+                    // Reset UI state on connection error
+                    const button = document.getElementById('start-detection');
+                    if (button && this.isDetectionRunning) {
+                        button.textContent = 'Start Detection';
+                        button.disabled = false;
+                        this.isDetectionRunning = false;
+                        this.sessionStartTime = null;
+                        this.resetCameraDisplay();
+                    }
                 }
             };
             
@@ -202,6 +219,74 @@ class MindfulTouchApp {
         }
     }
 
+    async waitForBackendReady() {
+        const maxAttempts = 30; // 30 seconds max wait
+        let attempts = 0;
+        
+        const checkBackend = async () => {
+            attempts++;
+            
+            try {
+                // Try to connect to WebSocket to test if backend is ready
+                const testSocket = new WebSocket(this.wsUrl);
+                
+                return new Promise((resolve, reject) => {
+                    const timeout = setTimeout(() => {
+                        testSocket.close();
+                        reject(new Error('Connection timeout'));
+                    }, 2000);
+                    
+                    testSocket.onopen = () => {
+                        clearTimeout(timeout);
+                        testSocket.close();
+                        resolve(true);
+                    };
+                    
+                    testSocket.onerror = () => {
+                        clearTimeout(timeout);
+                        reject(new Error('Connection failed'));
+                    };
+                });
+            } catch (error) {
+                throw error;
+            }
+        };
+        
+        // Update button text to show progress
+        const button = document.getElementById('start-detection');
+        
+        while (attempts < maxAttempts) {
+            try {
+                button.textContent = 'Starting...';
+                await checkBackend();
+                
+                // Backend is ready, connect WebSocket
+                button.textContent = 'Connecting...';
+                this.connectWebSocket();
+                
+                // Set detection as running only after backend is confirmed ready
+                this.isDetectionRunning = true;
+                this.sessionStartTime = Date.now();
+                button.textContent = 'Stop Detection';
+                button.disabled = false;
+                
+                // Update camera display only after backend is ready
+                this.updateCameraDisplay();
+                return;
+                
+            } catch (error) {
+                // Wait 1 second before next attempt
+                await new Promise(resolve => setTimeout(resolve, 1000));
+            }
+        }
+        
+        // Failed to connect after max attempts
+        button.textContent = 'Start Detection';
+        button.disabled = false;
+        this.isDetectionRunning = false;
+        this.showError('Backend failed to start. Please try again.');
+    }
+
     attemptReconnect() {
         if (this.reconnectAttempts < this.maxReconnectAttempts) {
             this.reconnectAttempts++;
@@ -249,25 +334,9 @@ class MindfulTouchApp {
                 // Start Python backend
                 await invoke('start_python_backend');
                 
-                // Backend should be running and WebSocket server available now
-                this.connectWebSocket();
-                
-                // Verify connection with health check
-                setTimeout(async () => {
-                    try {
-                        await invoke('check_backend_health');
-                    } catch (e) {
-                        // Health check failed - continue anyway
-                    }
-                }, 2000);
-                
-                this.isDetectionRunning = true;
-                this.sessionStartTime = Date.now();
-                button.textContent = 'Stop Detection';
-                button.disabled = false;
-                
-                // Update camera placeholder
-                this.updateCameraDisplay();
+                // Wait for backend to be ready with health check polling
+                // Don't set detection running until backend is confirmed ready
+                await this.waitForBackendReady();
                 
             } catch (error) {
                 button.textContent = 'Start Detection';
@@ -342,7 +411,7 @@ class MindfulTouchApp {
         placeholder.style.display = 'none';
         cameraFeed.style.display = 'block';
         
-        // Add detection status overlay
+        // Add detection status overlay with fixed dimensions
         const overlay = document.createElement('div');
         overlay.id = 'detection-overlay';
         overlay.style.cssText = `
@@ -356,6 +425,9 @@ class MindfulTouchApp {
             font-family: monospace;
             font-size: 12px;
             z-index: 10;
+            min-width: 220px;
+            width: 220px;
+            box-sizing: border-box;
         `;
         overlay.innerHTML = `
             <div class="detection-status">
@@ -370,7 +442,7 @@ class MindfulTouchApp {
             </div>
         `;
         
-        // Create stop button separately with proper styling
+        // Create stop button with fixed width to prevent size changes
         const stopButton = document.createElement('button');
         stopButton.id = 'stop-detection-btn';
         stopButton.className = 'primary-button';
@@ -384,6 +456,8 @@ class MindfulTouchApp {
             border-radius: 6px;
             cursor: pointer;
             font-size: 12px;
+            width: 110px;
+            text-align: center;
         `;
         
         // Add event listener before appending
@@ -416,7 +490,7 @@ class MindfulTouchApp {
         placeholder.innerHTML = `
             <div class="camera-icon">📹</div>
             <p>Camera feed will appear here</p>
-            <button id="start-detection" class="primary-button">Start Detection</button>
+            <button id="start-detection" class="primary-button" style="width: 140px; text-align: center;">Start Detection</button>
         `;
         
         // Re-attach event listener
@@ -513,13 +587,21 @@ class MindfulTouchApp {
             const faceStatus = document.getElementById('face-status');
             
             if (handsStatus) {
+                // Use fixed-width text to prevent box resizing
                 handsStatus.textContent = data.hands_detected ? 'Detected ✓' : 'Not detected ✗';
                 handsStatus.style.color = data.hands_detected ? '#10b981' : '#ef4444';
+                handsStatus.style.display = 'inline-block';
+                handsStatus.style.width = '120px';
+                handsStatus.style.whiteSpace = 'nowrap';
             }
             
             if (faceStatus) {
+                // Use fixed-width text to prevent box resizing
                 faceStatus.textContent = data.face_detected ? 'Detected ✓' : 'Not detected ✗';
                 faceStatus.style.color = data.face_detected ? '#10b981' : '#ef4444';
+                faceStatus.style.display = 'inline-block';
+                faceStatus.style.width = '120px';
+                faceStatus.style.whiteSpace = 'nowrap';
             }
             
             // Update detection overlay with contact and alert information
