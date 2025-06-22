@@ -164,17 +164,19 @@ cargo tauri dev
 
 ### 🎯 Immediate Next Tasks (Ready for Implementation)
 
-**PRIORITY 1: Make Region Toggle Buttons Functional**
-- Connect frontend toggle switches to actual backend region detection
-- Implement real-time region enable/disable functionality
-- Test that toggling scalp/eyebrows/eyes/mouth/beard actually affects detection
-- Ensure WebSocket messages properly control backend detection regions
+**PRIORITY 1: Add Sound Alerts and Notifications**
+- Implement audio feedback when hands touch configured face regions
+- Add customizable sound options (gentle chime, beep, etc.)
+- Integrate system notifications/popups for alerts
+- Allow users to enable/disable audio and notification alerts
+- Consider different alert intensities based on contact duration
 
-**PRIORITY 2: Add Live Camera Feed to Frontend**
-- Display live camera feed in the detection window
-- Show real-time video stream from the camera
-- Overlay detection indicators on the video feed
-- Visual feedback when hands approach configured regions
+**PRIORITY 2: UI/UX Improvements**
+- Redesign interface for better user experience
+- Improve visual hierarchy and information display
+- Enhance detection feedback and status indicators
+- Better integration of controls and statistics
+- Modern, intuitive design aligned with mindful wellness aesthetic
 
 ### 📋 Short-term Goals (1-2 weeks)
 
