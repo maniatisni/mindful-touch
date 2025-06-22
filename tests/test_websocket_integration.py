@@ -40,7 +40,15 @@ class TestWebSocketServer:
 
         # Start server in background thread
         server.run_in_thread()
-        await asyncio.sleep(2)  # Give more time for server startup
+
+        # Wait for server to be ready with retries (important for CI)
+        max_retries = 20
+        for attempt in range(max_retries):
+            await asyncio.sleep(0.5)
+            if server.running:
+                break
+            if attempt == max_retries - 1:
+                raise RuntimeError("WebSocket server failed to start within timeout")
 
         # Store port for tests to use
         server.test_port = port
@@ -121,22 +129,33 @@ class TestWebSocketServer:
             "active_regions": ["scalp", "eyebrows", "eyes"],
         }
 
-        async with websockets.connect(uri) as websocket:
-            # Trigger detection data update
-            websocket_server.update_detection_data(mock_detection_data)
+        # Retry connection for CI stability
+        max_connection_retries = 5
+        for retry in range(max_connection_retries):
+            try:
+                async with websockets.connect(uri) as websocket:
+                    # Trigger detection data update
+                    websocket_server.update_detection_data(mock_detection_data)
 
-            # Wait for broadcast message
-            response = await asyncio.wait_for(websocket.recv(), timeout=5.0)
-            data = json.loads(response)
+                    # Wait for broadcast message
+                    response = await asyncio.wait_for(websocket.recv(), timeout=5.0)
+                    data = json.loads(response)
 
-            assert data["type"] == "detection_data"
-            assert data["data"]["hands_detected"] is True
-            assert data["data"]["face_detected"] is True
-            assert data["data"]["contact_points"] == 2
-            assert "scalp" in data["data"]["alerts_active"]
-            assert "eyebrows" in data["data"]["alerts_active"]
+                    assert data["type"] == "detection_data"
+                    assert data["data"]["hands_detected"] is True
+                    assert data["data"]["face_detected"] is True
+                    assert data["data"]["contact_points"] == 2
+                    assert "scalp" in data["data"]["alerts_active"]
+                    assert "eyebrows" in data["data"]["alerts_active"]
 
-            logger.info("✅ Detection data broadcasting works")
+                    logger.info("✅ Detection data broadcasting works")
+                    return  # Success, exit retry loop
+            except (websockets.exceptions.InvalidMessage, websockets.exceptions.ConnectionClosed, OSError) as e:
+                if retry == max_connection_retries - 1:
+                    logger.error(f"Failed to connect after {max_connection_retries} retries: {e}")
+                    raise
+                logger.warning(f"Connection attempt {retry + 1} failed: {e}, retrying...")
+                await asyncio.sleep(1)
 
     @pytest.mark.asyncio
     async def test_multiple_client_connections(self, websocket_server):
