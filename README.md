@@ -10,99 +10,162 @@ Mindful Touch helps you become more aware of unconscious face-touching habits by
 
 ## 🌟 Features
 
+- **Cross-platform desktop app**: Native desktop application built with Tauri
 - **Multi-region detection**: Monitors specific facial regions (scalp, eyebrows, eyes, mouth, beard)
-- **Real-time visualization**: Live camera feed with detection overlays
+- **Real-time WebSocket communication**: Live data streaming between backend and frontend
+- **Interactive region controls**: Toggle detection regions on/off in real-time
+- **Session statistics**: Track detection events and session duration
+- **Automatic backend management**: No manual backend startup required
 - **Privacy-first**: All processing happens locally on your device
-- **Lightweight**: Minimal dependencies and system resource usage
+- **Lightweight**: Minimal system resource usage with optimized performance
 
 ## 📋 Requirements
 
 - Python 3.8 or newer
+- Rust and Cargo (for Tauri)
 - Webcam
 - Operating System: Windows, macOS, or Linux
 
 ## 🔧 Installation
 
-### Step 1: Install UV (recommended)
+### Step 1: Install Prerequisites
 
-**macOS/Linux:**
+**UV Package Manager:**
 ```bash
+# macOS/Linux
 curl -LsSf https://astral.sh/uv/install.sh | sh
-```
 
-**Windows:**
-```bash
+# Windows
 powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
-```
 
-**Alternative (pip):**
-```bash
+# Alternative (pip)
 pip install uv
 ```
 
-### Step 2: Clone and setup
+**Tauri CLI:**
+```bash
+cargo install tauri-cli
+```
+
+### Step 2: Clone and Setup
 
 ```bash
 # Clone the repository
 git clone https://github.com/maniatisni/mindful-touch.git
 cd mindful-touch
 
-# Install dependencies
+# Install Python dependencies
 uv sync
-
-# Install the application
-uv pip install -e .
 ```
 
 ## 🚀 Quick Start
 
-### Run with UV (recommended)
+### Desktop Application (Recommended)
 ```bash
-uv run mindful-touch
+cd frontend/src-tauri
+cargo tauri dev
 ```
 
-### Alternative methods
+### Backend Only (For Development/Testing)
 ```bash
-# Run as module
-uv run python -m mindful_touch
+# GUI mode with live video feed
+uv run python -m backend.detection.main
 
-# If installed globally
-mindful-touch
+# Headless mode (for frontend integration)
+uv run python -m backend.detection.main --headless
+
+# Mock camera mode (for CI/testing)
+uv run python -m backend.detection.main --headless --mock-camera
 ```
 
 ## 🎮 Usage
 
-When the application starts, you'll see:
+### Desktop Application
+When you launch the desktop app (`cargo tauri dev`), you'll see:
+1. **Connection status** showing backend communication
+2. **Region toggle controls** to enable/disable detection areas
+3. **Real-time statistics** showing detection events and session time
+4. **Start/Stop detection** controls for managing the detection process
+
+The application automatically manages the Python backend - no manual startup required!
+
+### Development Mode
+For development and testing, you can run the backend separately:
 1. **Live camera feed** with detection visualization
-2. **Status overlay** showing detection information
+2. **Status overlay** showing detection information  
 3. **Region boundaries** drawn around active detection areas
+4. **WebSocket server** for real-time communication on port 8765
 
 ## 🛠️ Development
 
-### Running linting and code checks
+### Build for Production
+```bash
+cd frontend/src-tauri
+cargo tauri build
+```
+
+### Running Tests
+```bash
+# Python tests
+uv run pytest
+
+# Integration tests
+uv run python scripts/run_integration_tests.py
+
+# Mock camera tests
+uv run python scripts/test_mock_camera.py
+```
+
+### Code Quality
 ```bash
 # Check code quality
-uv run ruff check src/
+uv run ruff check .
 
 # Auto-fix issues
-uv run ruff check src/ --fix
+uv run ruff check . --fix
+
+# Format code
+uv run ruff format .
+```
+
+### WebSocket Testing
+```bash
+# Test WebSocket connection
+uv run python scripts/test_websocket_integration.py
+
+# Debug frontend-backend integration
+uv run python scripts/debug_frontend.py
 ```
 
 ## 🔍 Troubleshooting
+
+### Desktop Application Issues
+- **Backend not starting**: Check if Python is installed and dependencies are available
+- **Connection failures**: Ensure no firewall blocking localhost:8765
+- **Tauri build errors**: Update Rust toolchain with `rustup update`
 
 ### Camera Issues
 - **No camera detected**: Ensure your webcam is connected and not used by other applications
 - **Poor detection**: Ensure good lighting and position camera at eye level
 - **Permission errors**: Grant camera permissions to your terminal/application
 
+### WebSocket Issues
+- **Connection timeout**: Verify backend is running on localhost:8765
+- **Data not updating**: Check WebSocket connection status in frontend
+- **Port conflicts**: Ensure port 8765 is not used by other applications
+
 ### Performance Issues
 - **High CPU usage**: Close other camera applications
 - **Slow detection**: Ensure adequate lighting for better MediaPipe performance
+- **Memory leaks**: Restart the application if running for extended periods
 
 ### Common Solutions
 ```bash
 # Reinstall dependencies
 uv sync --reinstall
+
+# Clean build cache
+cd frontend/src-tauri && cargo clean
 
 # Update to latest version
 git pull
