@@ -3,19 +3,20 @@ Mindful Touch - Multi-Region Detection
 Gentle awareness tool for mindful hand movement tracking
 """
 
-import sys
 import argparse
+
 import cv2
 
+from .camera_utils import MockCamera, initialize_camera
 from .config import Config
 from .multi_region_detector import MultiRegionDetector
-from .camera_utils import initialize_camera
 
 
 def main():
     parser = argparse.ArgumentParser(description="Mindful Touch - Multi-Region Detection")
     parser.add_argument("--headless", action="store_true", help="Run without GUI (for Tauri)")
     parser.add_argument("--camera", type=int, help="Camera index to use")
+    parser.add_argument("--mock-camera", action="store_true", help="Use mock camera for CI/testing")
     args = parser.parse_args()
 
     print("Mindful Touch - Multi-Region Detection")
@@ -25,16 +26,16 @@ def main():
     # Initialize multi-region detector
     detector = MultiRegionDetector()
 
-    # Initialize camera with dynamic detection
-    cap = initialize_camera(
-        camera_index=args.camera,
-        width=Config.CAMERA_WIDTH,
-        height=Config.CAMERA_HEIGHT
-    )
+    # Initialize camera with dynamic detection or mock for CI
+    if args.mock_camera:
+        print("Using mock camera for CI/testing environment")
+        cap = MockCamera(Config.CAMERA_WIDTH, Config.CAMERA_HEIGHT)
+    else:
+        cap = initialize_camera(camera_index=args.camera, width=Config.CAMERA_WIDTH, height=Config.CAMERA_HEIGHT)
 
-    if cap is None:
-        print("Error: Could not open any camera")
-        return
+        if cap is None:
+            print("Warning: Could not open any camera, falling back to mock camera")
+            cap = MockCamera(Config.CAMERA_WIDTH, Config.CAMERA_HEIGHT)
 
     if args.headless:
         run_headless_mode(cap, detector)
@@ -44,26 +45,25 @@ def main():
 
 def run_headless_mode(cap, detector):
     """Run detection without GUI - WebSocket mode for Tauri"""
-    import json
-    import time
-    import asyncio
     import logging
+    import time
+
     from ..server import DetectionWebSocketServer
-    
+
     # Set up logging
     logging.basicConfig(level=logging.INFO)
-    logger = logging.getLogger(__name__)
-    
+    logging.getLogger(__name__)
+
     print("Running in headless mode with WebSocket server...")
     print("WebSocket server will be available at ws://localhost:8765")
-    
+
     # Create and start WebSocket server
     ws_server = DetectionWebSocketServer()
-    server_thread = ws_server.run_in_thread()
-    
+    ws_server.run_in_thread()
+
     # Give server time to start
     time.sleep(1)
-    
+
     frame_count = 0
     try:
         while True:
@@ -81,15 +81,11 @@ def run_headless_mode(cap, detector):
             # Check for region toggle requests from WebSocket (simplified)
             # Note: For now we'll keep the region toggles simple
             # In the future we could use proper async handling
-            
+
             # Send detection data via WebSocket every 3 frames
             frame_count += 1
             if frame_count % 3 == 0:
-                detection_output = {
-                    "timestamp": time.time(),
-                    "active_regions": Config.ACTIVE_REGIONS,
-                    **detection_data
-                }
+                detection_output = {"timestamp": time.time(), "active_regions": Config.ACTIVE_REGIONS, **detection_data}
                 ws_server.update_detection_data(detection_output)
 
             # Small delay to prevent overwhelming the system
