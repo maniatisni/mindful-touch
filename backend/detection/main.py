@@ -103,9 +103,7 @@ def run_headless_mode(cap, detector, verbose=False):
 
     for attempt in range(max_port_attempts):
         try:
-            logger.info(
-                f"Attempting to start WebSocket server on port {port} (attempt {attempt + 1}/{max_port_attempts})"
-            )
+            logger.info(f"Attempting to start WebSocket server on port {port} (attempt {attempt + 1}/{max_port_attempts})")
             ws_server = DetectionWebSocketServer(port=port)
             ws_server.run_in_thread()
             logger.info(f"WebSocket server started on port {port}")
@@ -203,9 +201,7 @@ def run_headless_mode(cap, detector, verbose=False):
                     ws_server.update_detection_data(detection_output)
 
                 if verbose and frame_count % 60 == 0:
-                    logger.debug(
-                        f"Frame {frame_count}: {len(ws_server.clients)} clients, {detection_data.get('contact_points', 0)} contacts"
-                    )
+                    logger.debug(f"Frame {frame_count}: {len(ws_server.clients)} clients, {detection_data.get('contact_points', 0)} contacts")
 
             except queue.Empty:
                 continue
@@ -241,18 +237,20 @@ def run_headless_mode(cap, detector, verbose=False):
 def encode_frame_for_streaming(frame):
     """Encode frame for streaming - optimized for speed with good quality"""
     height, width = frame.shape[:2]
-    
+
     # Use good resolution for balance of quality and speed
     new_width = min(width, 960)  # Slightly smaller for better performance
     new_height = int(height * (new_width / width))
-    
+
     # Use linear interpolation for good quality and speed
     resized_frame = cv2.resize(frame, (new_width, new_height), interpolation=cv2.INTER_LINEAR)
-    
+
     # Use high quality JPEG (skip PNG for speed)
     encode_params_jpg = [
-        cv2.IMWRITE_JPEG_QUALITY, 85,  # Good quality, much faster than 98%
-        cv2.IMWRITE_JPEG_OPTIMIZE, 1,  # Keep optimization for size
+        cv2.IMWRITE_JPEG_QUALITY,
+        85,  # Good quality, much faster than 98%
+        cv2.IMWRITE_JPEG_OPTIMIZE,
+        1,  # Keep optimization for size
     ]
     _, buffer = cv2.imencode(".jpg", resized_frame, encode_params_jpg)
     return base64.b64encode(buffer).decode("utf-8")
