@@ -436,7 +436,11 @@ class MindfulTouchApp {
                     byteNumbers[i] = byteCharacters.charCodeAt(i);
                 }
                 const byteArray = new Uint8Array(byteNumbers);
-                const blob = new Blob([byteArray], { type: 'image/jpeg' });
+                
+                // Auto-detect image type (PNG or JPEG) based on header
+                const isPNG = byteArray[0] === 0x89 && byteArray[1] === 0x50 && byteArray[2] === 0x4E && byteArray[3] === 0x47;
+                const mimeType = isPNG ? 'image/png' : 'image/jpeg';
+                const blob = new Blob([byteArray], { type: mimeType });
                 
                 // Revoke previous object URL to prevent memory leaks
                 if (cameraFeed.src && cameraFeed.src.startsWith('blob:')) {

@@ -5,6 +5,10 @@ Gentle awareness tool for mindful hand movement tracking
 
 import argparse
 import base64
+import queue
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
 
 import cv2
 
@@ -68,10 +72,9 @@ def main():
 
 
 def run_headless_mode(cap, detector, verbose=False):
-    """Run detection without GUI - WebSocket mode for Tauri"""
+    """Run detection without GUI - WebSocket mode for Tauri with threading"""
     import logging
     import os
-    import time
 
     from ..server import DetectionWebSocketServer
 
@@ -90,11 +93,10 @@ def run_headless_mode(cap, detector, verbose=False):
         logger.debug(f"Python version: {platform.python_version()}")
 
     if verbose:
-        logger.info("Running in headless mode with WebSocket server...")
+        logger.info("Running in headless mode with WebSocket server and threading...")
         logger.info("WebSocket server will be available at ws://localhost:8765")
 
     # Create and start WebSocket server
-    # Try to find an available port starting from 8765
     port = 8765
     max_port_attempts = 5
     ws_server = None
@@ -106,7 +108,6 @@ def run_headless_mode(cap, detector, verbose=False):
             )
             ws_server = DetectionWebSocketServer(port=port)
             ws_server.run_in_thread()
-            # If we get here, the server started successfully
             logger.info(f"WebSocket server started on port {port}")
             break
         except Exception as e:
@@ -117,96 +118,154 @@ def run_headless_mode(cap, detector, verbose=False):
         logger.error(f"Failed to start WebSocket server after {max_port_attempts} attempts")
         return
 
-    # Log whether the server is ready
-    if ws_server.ready_event.is_set():
-        logger.info("WebSocket server is ready and running")
-    else:
-        logger.warning("WebSocket server ready event not set - this may indicate a startup issue")
+    # Threading setup
+    frame_queue = queue.Queue(maxsize=2)  # Small queue to prevent lag
+    detection_queue = queue.Queue(maxsize=5)
+    shutdown_event = threading.Event()
 
-    frame_count = 0
-    try:
-        while True:
-            ret, frame = cap.read()
-            if not ret:
-                logger.error("Could not read frame from camera")
+    # Create thread pool for frame processing (increased for high quality)
+    executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="frame_processor")
+
+    def camera_capture_thread():
+        """Dedicated thread for camera capture"""
+        frame_count = 0
+        while not shutdown_event.is_set():
+            try:
+                ret, frame = cap.read()
+                if not ret:
+                    logger.error("Could not read frame from camera")
+                    break
+
+                frame = cv2.flip(frame, 1)  # Mirror effect
+                frame_count += 1
+
+                # Put frame in queue, drop old frames if queue full
+                try:
+                    frame_queue.put_nowait((frame_count, frame))
+                except queue.Full:
+                    # Drop oldest frame to prevent lag
+                    try:
+                        frame_queue.get_nowait()
+                        frame_queue.put_nowait((frame_count, frame))
+                    except queue.Empty:
+                        pass
+
+            except Exception as e:
+                logger.error(f"Camera capture error: {e}")
                 break
 
-            # Flip frame horizontally for mirror effect
-            frame = cv2.flip(frame, 1)
+    def frame_processing_thread():
+        """Dedicated thread for detection processing and encoding"""
+        while not shutdown_event.is_set():
+            try:
+                frame_count, frame = frame_queue.get(timeout=0.1)
 
-            # Process frame (without visualization)
-            _, detection_data = detector.process_frame(frame)
+                # Process detection in parallel
+                future_detection = executor.submit(detector.process_frame, frame)
 
-            # Check for region toggle requests from WebSocket
-            toggle_request = ws_server.get_region_toggle_sync()
-            if toggle_request:
-                region = toggle_request.get("region")
-                enabled = toggle_request.get("enabled")
+                # Check for region toggles
+                toggle_request = ws_server.get_region_toggle_sync()
+                if toggle_request:
+                    region = toggle_request.get("region")
+                    enabled = toggle_request.get("enabled")
+                    if enabled:
+                        if region not in Config.ACTIVE_REGIONS:
+                            Config.ACTIVE_REGIONS.append(region)
+                            logger.info(f"Region '{region}' enabled")
+                    else:
+                        if region in Config.ACTIVE_REGIONS:
+                            Config.ACTIVE_REGIONS.remove(region)
+                            logger.info(f"Region '{region}' disabled")
 
-                if enabled:
-                    if region not in Config.ACTIVE_REGIONS:
-                        Config.ACTIVE_REGIONS.append(region)
-                        logger.info(f"Region '{region}' enabled")
-                else:
-                    if region in Config.ACTIVE_REGIONS:
-                        Config.ACTIVE_REGIONS.remove(region)
-                        logger.info(f"Region '{region}' disabled")
+                # Get detection results
+                _, detection_data = future_detection.result()
 
-            # Send frames only if clients are connected to avoid processing overhead
-            frame_count += 1
-            
-            if len(ws_server.clients) > 0:
-                # Send every 2nd frame to reduce load while maintaining smoothness
-                if frame_count % 2 == 0:
-                    # Drastically reduce frame size for real-time streaming
-                    height, width = frame.shape[:2]
-                    new_width = min(width, 320)  # Much smaller for real-time
-                    new_height = int(height * (new_width / width))
-                    resized_frame = cv2.resize(frame, (new_width, new_height))
+                # Send to WebSocket if clients connected
+                if len(ws_server.clients) > 0:
+                    # Encode frame asynchronously
+                    future_encoding = executor.submit(encode_frame_for_streaming, frame)
 
-                    # Use very aggressive compression for speed
-                    encode_params = [
-                        cv2.IMWRITE_JPEG_QUALITY, 30,  # Very low quality
-                        cv2.IMWRITE_JPEG_PROGRESSIVE, 1,  # Progressive JPEG
-                        cv2.IMWRITE_JPEG_OPTIMIZE, 1  # Optimize Huffman tables
-                    ]
-                    _, buffer = cv2.imencode(".jpg", resized_frame, encode_params)
-                    frame_base64 = base64.b64encode(buffer).decode("utf-8")
-
-                    detection_output = {
-                        "timestamp": time.time(),
-                        "active_regions": Config.ACTIVE_REGIONS,
-                        "frame": frame_base64,
-                        **detection_data,
-                    }
-                    ws_server.update_detection_data(detection_output)
-                else:
-                    # Send detection data without frame for better responsiveness
+                    # Send detection data immediately
                     detection_output = {
                         "timestamp": time.time(),
                         "active_regions": Config.ACTIVE_REGIONS,
                         **detection_data,
                     }
+
+                    # Send every frame for maximum smoothness (was every 2nd frame)
+                    try:
+                        frame_base64 = future_encoding.result(timeout=0.25)  # Even longer timeout for maximum quality encoding
+                        detection_output["frame"] = frame_base64
+                    except:
+                        pass  # Skip frame if encoding takes too long
+
                     ws_server.update_detection_data(detection_output)
-            else:
-                # No clients connected, just process detection data
-                pass
-                
-            if verbose and frame_count % 60 == 0:  # Log every ~60 frames when verbose
-                logger.debug(
-                    f"Frame {frame_count}: {len(ws_server.clients)} clients, {len(Config.ACTIVE_REGIONS)} active regions, {detection_data.get('contact_points', 0)} contact points"
-                )
 
-            # No artificial delay for real-time performance
+                if verbose and frame_count % 60 == 0:
+                    logger.debug(
+                        f"Frame {frame_count}: {len(ws_server.clients)} clients, {detection_data.get('contact_points', 0)} contacts"
+                    )
 
+            except queue.Empty:
+                continue
+            except Exception as e:
+                logger.error(f"Frame processing error: {e}")
+
+    # Start threads
+    camera_thread = threading.Thread(target=camera_capture_thread, name="camera_capture")
+    processing_thread = threading.Thread(target=frame_processing_thread, name="frame_processing")
+
+    camera_thread.start()
+    processing_thread.start()
+
+    try:
+        # Keep main thread alive
+        while True:
+            time.sleep(0.1)
+            if not camera_thread.is_alive() or not processing_thread.is_alive():
+                break
     except KeyboardInterrupt:
         logger.info("Detection service interrupted by keyboard")
-    except Exception as e:
-        logger.error(f"Unexpected error in detection loop: {e}", exc_info=True)
     finally:
+        # Cleanup
+        shutdown_event.set()
+        camera_thread.join(timeout=2.0)
+        processing_thread.join(timeout=2.0)
+        executor.shutdown(wait=True)
         cap.release()
         detector.cleanup()
         logger.info("Detection service stopped and resources released")
+
+
+def encode_frame_for_streaming(frame):
+    """Encode frame for streaming - runs in thread pool with maximum quality"""
+    height, width = frame.shape[:2]
+    
+    # Use original resolution or larger for maximum quality
+    new_width = min(width, 1280)  # Full HD width for maximum crispness
+    new_height = int(height * (new_width / width))
+    
+    # Use Lanczos interpolation for sharpest results
+    resized_frame = cv2.resize(frame, (new_width, new_height), interpolation=cv2.INTER_LANCZOS4)
+    
+    # Try PNG for lossless compression first (better for crisp details)
+    try:
+        encode_params_png = [cv2.IMWRITE_PNG_COMPRESSION, 3]  # Fast PNG compression
+        success, buffer = cv2.imencode(".png", resized_frame, encode_params_png)
+        if success and len(buffer) < 500000:  # If PNG is reasonable size (< 500KB)
+            return base64.b64encode(buffer).decode("utf-8")
+    except:
+        pass
+    
+    # Fallback to highest quality JPEG
+    encode_params_jpg = [
+        cv2.IMWRITE_JPEG_QUALITY, 98,  # Near lossless JPEG
+        cv2.IMWRITE_JPEG_PROGRESSIVE, 1,
+        cv2.IMWRITE_JPEG_OPTIMIZE, 1,
+        cv2.IMWRITE_JPEG_SAMPLING_FACTOR, 0x11,
+    ]
+    _, buffer = cv2.imencode(".jpg", resized_frame, encode_params_jpg)
+    return base64.b64encode(buffer).decode("utf-8")
 
 
 def run_gui_mode(cap, detector):
