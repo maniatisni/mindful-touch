@@ -43,11 +43,26 @@ def main():
 
 
 def run_headless_mode(cap, detector):
-    """Run detection without GUI - output JSON for Tauri"""
+    """Run detection without GUI - WebSocket mode for Tauri"""
     import json
     import time
+    import asyncio
+    import logging
+    from ..server import DetectionWebSocketServer
     
-    print("Running in headless mode - outputting detection data...")
+    # Set up logging
+    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger(__name__)
+    
+    print("Running in headless mode with WebSocket server...")
+    print("WebSocket server will be available at ws://localhost:8765")
+    
+    # Create and start WebSocket server
+    ws_server = DetectionWebSocketServer()
+    server_thread = ws_server.run_in_thread()
+    
+    # Give server time to start
+    time.sleep(1)
     
     frame_count = 0
     try:
@@ -63,20 +78,22 @@ def run_headless_mode(cap, detector):
             # Process frame (without visualization)
             _, detection_data = detector.process_frame(frame)
 
-            # Output detection data every 10 frames to reduce spam
+            # Check for region toggle requests from WebSocket (simplified)
+            # Note: For now we'll keep the region toggles simple
+            # In the future we could use proper async handling
+            
+            # Send detection data via WebSocket every 3 frames
             frame_count += 1
-            if frame_count % 10 == 0:
-                # Send detection data to Tauri (via stdout)
-                output = {
-                    "type": "detection",
+            if frame_count % 3 == 0:
+                detection_output = {
                     "timestamp": time.time(),
-                    "data": detection_data
+                    "active_regions": Config.ACTIVE_REGIONS,
+                    **detection_data
                 }
-                print(f"DETECTION_DATA: {json.dumps(output)}")
-                sys.stdout.flush()
+                ws_server.update_detection_data(detection_output)
 
             # Small delay to prevent overwhelming the system
-            time.sleep(0.1)
+            time.sleep(0.05)
 
     except KeyboardInterrupt:
         print("Detection service interrupted")

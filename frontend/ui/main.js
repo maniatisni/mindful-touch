@@ -23,6 +23,12 @@ class MindfulTouchApp {
             mostActiveRegion: 'None'
         };
         
+        // WebSocket connection
+        this.websocket = null;
+        this.wsUrl = 'ws://localhost:8765';
+        this.reconnectAttempts = 0;
+        this.maxReconnectAttempts = 5;
+        
         this.init();
     }
 
@@ -41,6 +47,89 @@ class MindfulTouchApp {
         setTimeout(async () => {
             await this.testTauriConnection();
         }, 500);
+    }
+
+    connectWebSocket() {
+        console.log('Connecting to WebSocket...');
+        
+        try {
+            this.websocket = new WebSocket(this.wsUrl);
+            
+            this.websocket.onopen = () => {
+                console.log('WebSocket connected successfully');
+                this.reconnectAttempts = 0;
+                this.updateConnectionStatus(true);
+                
+                // Send ping to test connection
+                this.sendWebSocketMessage({ type: 'ping' });
+            };
+            
+            this.websocket.onmessage = (event) => {
+                this.handleWebSocketMessage(event.data);
+            };
+            
+            this.websocket.onclose = () => {
+                console.log('WebSocket connection closed');
+                this.updateConnectionStatus(false);
+                this.attemptReconnect();
+            };
+            
+            this.websocket.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                this.updateConnectionStatus(false);
+            };
+            
+        } catch (error) {
+            console.error('Failed to create WebSocket connection:', error);
+            this.updateConnectionStatus(false);
+        }
+    }
+
+    sendWebSocketMessage(message) {
+        if (this.websocket && this.websocket.readyState === WebSocket.OPEN) {
+            this.websocket.send(JSON.stringify(message));
+        } else {
+            console.warn('WebSocket not connected, cannot send message:', message);
+        }
+    }
+
+    handleWebSocketMessage(data) {
+        try {
+            const message = JSON.parse(data);
+            
+            switch (message.type) {
+                case 'detection_data':
+                    this.onDetectionData(message.data);
+                    break;
+                    
+                case 'region_toggle_response':
+                    console.log('Region toggle confirmed:', message.region, message.enabled);
+                    break;
+                    
+                case 'pong':
+                    console.log('WebSocket ping successful');
+                    break;
+                    
+                default:
+                    console.log('Unknown WebSocket message:', message);
+            }
+        } catch (error) {
+            console.error('Failed to parse WebSocket message:', error);
+        }
+    }
+
+    attemptReconnect() {
+        if (this.reconnectAttempts < this.maxReconnectAttempts) {
+            this.reconnectAttempts++;
+            console.log(`Attempting to reconnect (${this.reconnectAttempts}/${this.maxReconnectAttempts})...`);
+            
+            setTimeout(() => {
+                this.connectWebSocket();
+            }, 2000 * this.reconnectAttempts); // Exponential backoff
+        } else {
+            console.error('Max reconnection attempts reached');
+            this.showError('Lost connection to detection service');
+        }
     }
 
     async testTauriConnection() {
@@ -88,6 +177,11 @@ class MindfulTouchApp {
                 const result = await invoke('start_python_backend');
                 console.log('Python backend result:', result);
                 
+                // Connect to WebSocket after a short delay
+                setTimeout(() => {
+                    this.connectWebSocket();
+                }, 2000);
+                
                 this.isDetectionRunning = true;
                 this.sessionStartTime = Date.now();
                 button.textContent = 'Stop Detection';
@@ -110,6 +204,12 @@ class MindfulTouchApp {
             this.sessionStartTime = null;
             button.textContent = 'Start Detection';
             
+            // Close WebSocket connection
+            if (this.websocket) {
+                this.websocket.close();
+                this.websocket = null;
+            }
+            
             // Reset camera display
             this.resetCameraDisplay();
             
@@ -119,15 +219,26 @@ class MindfulTouchApp {
 
     async toggleRegion(region, enabled) {
         try {
-            const response = await invoke('toggle_region', { region: region });
-            console.log('Region toggle result:', response);
+            console.log(`Toggling region ${region}: ${enabled}`);
             
-            // Update UI to reflect change
-            const label = document.querySelector(`#${region}-toggle + .region-label`);
+            // Send via WebSocket if connected
+            if (this.websocket && this.websocket.readyState === WebSocket.OPEN) {
+                this.sendWebSocketMessage({
+                    type: 'toggle_region',
+                    region: region,
+                    enabled: enabled
+                });
+            } else {
+                console.warn('WebSocket not connected, region toggle may not work');
+            }
+            
+            // Update UI to reflect change immediately
+            const label = document.querySelector(`#${region}-toggle`).parentElement.querySelector('.region-label');
             if (label) {
                 label.style.fontWeight = enabled ? '600' : '500';
                 label.style.color = enabled ? '#667eea' : '#4a5568';
             }
+            
         } catch (error) {
             console.error('Failed to toggle region:', error);
         }
@@ -224,13 +335,30 @@ class MindfulTouchApp {
         }, 5000);
     }
 
-    // Method to receive detection data from Python backend
+    // Method to receive detection data from WebSocket
     onDetectionData(data) {
-        // This will be called when we receive detection data
-        this.statistics.totalDetections++;
+        console.log('Received detection data:', data);
         
+        // Update detection statistics
         if (data.alerts_active && data.alerts_active.length > 0) {
+            this.statistics.totalDetections++;
             this.statistics.mostActiveRegion = data.alerts_active[0];
+        }
+        
+        // Update live status display
+        if (this.isDetectionRunning) {
+            const handsStatus = document.getElementById('hands-status');
+            const faceStatus = document.getElementById('face-status');
+            
+            if (handsStatus) {
+                handsStatus.textContent = data.hands_detected ? 'Detected ✓' : 'Not detected ✗';
+                handsStatus.style.color = data.hands_detected ? '#10b981' : '#ef4444';
+            }
+            
+            if (faceStatus) {
+                faceStatus.textContent = data.face_detected ? 'Detected ✓' : 'Not detected ✗';
+                faceStatus.style.color = data.face_detected ? '#10b981' : '#ef4444';
+            }
         }
         
         this.updateUI();
