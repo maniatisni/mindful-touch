@@ -192,12 +192,13 @@ def run_headless_mode(cap, detector, verbose=False):
                         **detection_data,
                     }
 
-                    # Send every frame for maximum smoothness (was every 2nd frame)
-                    try:
-                        frame_base64 = future_encoding.result(timeout=0.25)  # Even longer timeout for maximum quality encoding
-                        detection_output["frame"] = frame_base64
-                    except:
-                        pass  # Skip frame if encoding takes too long
+                    # Send every 2nd frame for good performance
+                    if frame_count % 2 == 0:
+                        try:
+                            frame_base64 = future_encoding.result(timeout=0.1)  # Shorter timeout for better responsiveness
+                            detection_output["frame"] = frame_base64
+                        except:
+                            pass  # Skip frame if encoding takes too long
 
                     ws_server.update_detection_data(detection_output)
 
@@ -238,31 +239,20 @@ def run_headless_mode(cap, detector, verbose=False):
 
 
 def encode_frame_for_streaming(frame):
-    """Encode frame for streaming - runs in thread pool with maximum quality"""
+    """Encode frame for streaming - optimized for speed with good quality"""
     height, width = frame.shape[:2]
     
-    # Use original resolution or larger for maximum quality
-    new_width = min(width, 1280)  # Full HD width for maximum crispness
+    # Use good resolution for balance of quality and speed
+    new_width = min(width, 960)  # Slightly smaller for better performance
     new_height = int(height * (new_width / width))
     
-    # Use Lanczos interpolation for sharpest results
-    resized_frame = cv2.resize(frame, (new_width, new_height), interpolation=cv2.INTER_LANCZOS4)
+    # Use linear interpolation for good quality and speed
+    resized_frame = cv2.resize(frame, (new_width, new_height), interpolation=cv2.INTER_LINEAR)
     
-    # Try PNG for lossless compression first (better for crisp details)
-    try:
-        encode_params_png = [cv2.IMWRITE_PNG_COMPRESSION, 3]  # Fast PNG compression
-        success, buffer = cv2.imencode(".png", resized_frame, encode_params_png)
-        if success and len(buffer) < 500000:  # If PNG is reasonable size (< 500KB)
-            return base64.b64encode(buffer).decode("utf-8")
-    except:
-        pass
-    
-    # Fallback to highest quality JPEG
+    # Use high quality JPEG (skip PNG for speed)
     encode_params_jpg = [
-        cv2.IMWRITE_JPEG_QUALITY, 98,  # Near lossless JPEG
-        cv2.IMWRITE_JPEG_PROGRESSIVE, 1,
-        cv2.IMWRITE_JPEG_OPTIMIZE, 1,
-        cv2.IMWRITE_JPEG_SAMPLING_FACTOR, 0x11,
+        cv2.IMWRITE_JPEG_QUALITY, 85,  # Good quality, much faster than 98%
+        cv2.IMWRITE_JPEG_OPTIMIZE, 1,  # Keep optimization for size
     ]
     _, buffer = cv2.imencode(".jpg", resized_frame, encode_params_jpg)
     return base64.b64encode(buffer).decode("utf-8")
