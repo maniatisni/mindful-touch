@@ -81,13 +81,20 @@ jobs:
           echo "Building standalone backend executable..."
           uv run pyinstaller backend_standalone.spec --clean --noconfirm
           echo "Backend executable created successfully"
-          # Copy executable to frontend resources for bundling
+      
+      - name: Copy backend executable to Tauri resources (Unix)
+        if: matrix.os != 'windows'
+        run: |
           mkdir -p frontend/src-tauri/resources
-          if [[ "${{ matrix.os }}" == "windows" ]]; then
-            cp dist/mindful-touch-backend.exe frontend/src-tauri/resources/
-          else
-            cp dist/mindful-touch-backend frontend/src-tauri/resources/
-          fi
+          cp dist/mindful-touch-backend frontend/src-tauri/resources/
+          ls -la frontend/src-tauri/resources/
+      
+      - name: Copy backend executable to Tauri resources (Windows)
+        if: matrix.os == 'windows'
+        run: |
+          New-Item -ItemType Directory -Force -Path frontend/src-tauri/resources
+          Copy-Item dist/mindful-touch-backend.exe frontend/src-tauri/resources/
+          Get-ChildItem frontend/src-tauri/resources/
       
       - name: Install Tauri CLI
         run: cargo install tauri-cli --locked
