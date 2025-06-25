@@ -162,41 +162,76 @@ cargo tauri dev
 
 ## Next Steps & Roadmap
 
-### 🎯 Immediate Next Tasks (Ready for Implementation)
+### 🔧 NEXT SESSION PRIORITIES (Production Release Issues)
 
-**PRIORITY 1: Add Sound Alerts and Notifications**
-- Implement audio feedback when hands touch configured face regions
-- Add customizable sound options (gentle chime, beep, etc.)
-- Integrate system notifications/popups for alerts
-- Allow users to enable/disable audio and notification alerts
-- Consider different alert intensities based on contact duration
+**CRITICAL PRIORITY 1: Fix Production Build & Distribution Issues**
+- **macOS Distribution**: Python backend not found after build - fix backend bundling/path resolution
+- **Windows Build Failure**: Fix RC2175 icon format error in Windows build process  
+- **Code Signing**: Implement proper code signing for macOS to avoid `xattr -c` requirement
+- **CI/CD Optimization**: Simplify GitHub Actions workflow using matrix builds for all 3 platforms
+- **Backend Packaging**: Ensure Python backend and dependencies are properly bundled in production builds
 
-**PRIORITY 2: UI/UX Improvements**
-- Redesign interface for better user experience
-- Improve visual hierarchy and information display
-- Enhance detection feedback and status indicators
-- Better integration of controls and statistics
-- Modern, intuitive design aligned with mindful wellness aesthetic
+**CRITICAL PRIORITY 2: Cross-Platform Testing & Validation**
+- Test Linux build functionality and fix any platform-specific issues
+- Validate backend process management works correctly on all platforms in production builds
+- Ensure proper error handling when Python backend fails to start
+- Add automated testing for production builds in CI/CD
+
+### 🎯 Immediate Next Tasks (After Build Issues Resolved)
+
+**PRIORITY 1: Privacy & Performance Optimization** ✅ **NEW USER REQUEST**
+- Add option to run detection without showing live camera feed
+- Implement "Privacy Mode" toggle that hides video but keeps detection active
+- Video quality settings (High/Medium/Low/Off) for performance optimization
+- Allow algorithm to work in background without displaying user's face
+- Consider showing detection status overlay without actual camera feed
+- Enable completely headless detection mode for maximum privacy
+
+**PRIORITY 2: Resource Usage Optimization & Testing**
+- Implement video quality controls (resolution/frame rate reduction)
+- Test system resource usage (CPU, Memory, Battery) across different modes:
+  - High quality video feed
+  - Medium quality video feed  
+  - Low quality video feed
+  - No video feed (detection only)
+- Performance benchmarking tools for resource monitoring
+- Lightweight mode for low-end hardware or battery preservation
+- Real-time resource usage display in UI for user awareness
+
+**PRIORITY 3: Enhanced Privacy Options**
+- Option to disable camera feed recording/display entirely
+- Background-only detection with minimal visual feedback
+- Audio-only alerts without any visual camera component
+- Stealth mode for workplace/public environments
+- Camera indicator control (show/hide camera usage)
 
 ### 📋 Short-term Goals (1-2 weeks)
 
-1. **Enhanced Detection Feedback**
-   - Visual alerts/highlights when contact is detected
-   - Sound notifications for alerts
-   - Real-time region status indicators
-   - Detection confidence levels display
+1. **Privacy-First Detection Mode** ✅ **HIGH PRIORITY**
+   - Privacy mode toggle in UI (show/hide camera feed)
+   - Video quality selector (High/Medium/Low/Off) in settings
+   - Detection algorithm continues running without video display
+   - Minimal status indicators without showing face
+   - Background detection with audio alerts only
+   - Camera usage discretion for workplace environments
 
-2. **Improved UI/UX**
-   - Better statistics dashboard with charts
+2. **Enhanced User Experience**
+   ✅ Sound alerts with customizable options (Chime, Beep, Gentle)
+   ✅ Notification delay system (0-10 seconds) to prevent spam
+   ✅ Positive reinforcement for mindful stops
+   ✅ Fixed analytics counting (only actual alerts, not rapid triggers)
+   - Settings persistence to local storage
    - Session history tracking
-   - Settings panel for sensitivity adjustment
-   - Theme customization options
+   - Volume of sounds
 
-3. **Configuration & Settings**
+3. **Advanced Detection Features**
    - User-configurable sensitivity settings per region
    - Customizable region definitions and boundaries
-   - Settings persistence to local storage
-   - Export/import configuration profiles
+   - Detection confidence levels display
+   - Export session data to CSV/JSON
+   - Ensure if user tilts head, that the polygon will be tilted as well, detection doesn't work very well when head is tilted.
+   - After a while of running the app, the triggers work but sound is not audible.
+
 
 ### 🔮 Medium-term Goals (1-2 months)
 
@@ -207,11 +242,14 @@ cargo tauri dev
    - Custom alert patterns and schedules
 
 2. **Performance & Polish**
-   - Frame rate optimization for different hardware
+   ✅ **RESEARCH PRIORITY**: Video quality impact testing
+   - Frame rate optimization for different hardware  
    - Memory usage improvements and monitoring
-   - CPU usage optimization
-   - Battery usage optimization for laptops
+   - CPU usage optimization based on video quality settings
+   - Battery usage optimization for laptops (critical for portable use)
+   - Resource usage benchmarking across quality modes
    - Error handling and recovery mechanisms
+   - Performance profiling tools integration
 
 3. **Platform Expansion**
    - System tray integration for background operation
@@ -227,15 +265,20 @@ cargo tauri dev
    - Add logging framework with proper levels
    - Code documentation and docstrings
 
-2. **Testing**
+2. **Testing & Performance Research**
    - Increase test coverage to >90%
    - Add end-to-end tests for full user workflows
-   - Performance benchmarking tests
+   ✅ **NEW**: Performance benchmarking tests across video quality modes
+   ✅ **NEW**: Resource usage testing (CPU/Memory/Battery) for optimization
    - Cross-platform compatibility tests
+   - Automated performance regression testing
+   - Real-world usage pattern testing for resource consumption
 
 3. **DevOps**
-   - GitHub Actions CI/CD pipeline
-   - Automated releases and distribution
+   - GitHub Actions CI/CD pipeline optimization with matrix builds
+   - Automated releases and distribution with proper code signing
+   - Fix Windows icon format issue (RC2175 error)
+   - Fix macOS backend bundling for production builds
    - Docker containerization for development
    - Code quality checks and automated formatting
 
@@ -257,6 +300,14 @@ cargo tauri dev
    - Update Rust toolchain: `rustup update`
    - Clear build cache: `cargo clean`
    - Check system dependencies
+
+4. **Production Build Issues**
+   - **macOS**: Python backend not found after unsigned app installation
+     - Backend bundling issue - Python executable not included in app bundle
+     - Workaround: Run `xattr -c "/path/to/app"` to remove quarantine attributes
+   - **Windows**: RC2175 icon format error during build
+     - Icon file not in proper 3.00 format for Windows Resource Compiler
+   - **Code Signing**: Apps require signing for proper distribution
 
 ### Debug Commands
 

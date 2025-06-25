@@ -65,6 +65,41 @@
                         <span class="region-label">Beard</span>
                     </div>
                 </div>
+                
+                <h2 style="margin-top: 2rem;">Notification Settings</h2>
+                <div class="notification-controls">
+                    <div class="notification-setting">
+                        <label class="switch">
+                            <input type="checkbox" id="notifications-enabled" checked>
+                            <span class="slider"></span>
+                        </label>
+                        <span class="setting-label">Enable Notifications</span>
+                    </div>
+                    
+                    <div class="notification-setting">
+                        <label class="switch">
+                            <input type="checkbox" id="sound-enabled" checked>
+                            <span class="slider"></span>
+                        </label>
+                        <span class="setting-label">Sound Alerts</span>
+                    </div>
+                    
+                    <div class="delay-setting">
+                        <label for="notification-delay" class="setting-label">Alert Delay (seconds):</label>
+                        <input type="range" id="notification-delay" min="0" max="10" value="3" class="delay-slider">
+                        <span id="delay-value" class="delay-value">3s</span>
+                    </div>
+                    
+                    <div class="sound-test">
+                        <label class="setting-label">Alert Sound:</label>
+                        <div class="sound-selection">
+                            <button class="sound-select-button active" data-sound="chime">🔔 Chime</button>
+                            <button class="sound-select-button" data-sound="beep">📢 Beep</button>
+                            <button class="sound-select-button" data-sound="gentle">🎵 Gentle</button>
+                        </div>
+                        <button class="test-sound-button" id="test-sound-btn">▶️ Test Selected Sound</button>
+                    </div>
+                </div>
             </section>
 
             <!-- Camera Feed -->
@@ -80,6 +115,7 @@
                 </div>
             </section>
 
+
             <!-- Analytics -->
             <section class="analytics-panel">
                 <h2>Today's Activity</h2>
@@ -93,8 +129,8 @@
                         <div class="stat-label">Session</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-number" id="most-active-region">None</div>
-                        <div class="stat-label">Most Active</div>
+                        <div class="stat-number" id="mindful-saves">0</div>
+                        <div class="stat-label">Mindful Stops</div>
                     </div>
                 </div>
             </section>

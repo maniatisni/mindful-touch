@@ -17,10 +17,26 @@ class MindfulTouchApp {
         this.isDetectionRunning = false;
         this.sessionStartTime = null;
         this.statistics = {
-            totalDetections: 0,
+            totalDetections: 0, // Only count actual alerts (after delay)
             sessionDuration: 0,
-            mostActiveRegion: 'None'
+            mindfulStops: 0 // Count when user stops touching before alert
         };
+        
+        // Notification settings
+        this.notificationSettings = {
+            enabled: true,
+            soundEnabled: true,
+            delaySeconds: 3,
+            selectedSound: 'chime'
+        };
+        
+        // Alert delay management
+        this.alertDelayTimeouts = new Map(); // Track active delays by region
+        this.activeAlerts = new Set(); // Track which regions are currently alerting
+        
+        // Audio context for playing sounds
+        this.audioContext = null;
+        this.soundBuffers = {};
         
         // WebSocket connection
         this.websocket = null;
@@ -318,6 +334,9 @@ class MindfulTouchApp {
             const toggle = document.getElementById(`${region}-toggle`);
             toggle.addEventListener('change', (e) => this.toggleRegion(region, e.target.checked));
         });
+        
+        // Notification Settings
+        this.setupNotificationListeners();
 
         // Session timer
         setInterval(() => this.updateSessionTimer(), 1000);
@@ -545,7 +564,7 @@ class MindfulTouchApp {
     updateUI() {
         // Update statistics display
         document.getElementById('total-detections').textContent = this.statistics.totalDetections;
-        document.getElementById('most-active-region').textContent = this.statistics.mostActiveRegion;
+        document.getElementById('mindful-saves').textContent = this.statistics.mindfulStops;
     }
 
     showError(message) {
@@ -575,10 +594,13 @@ class MindfulTouchApp {
 
     // Method to receive detection data from WebSocket
     onDetectionData(data) {
-        // Update detection statistics
+        // Handle alert delays - start timers for new alerts, cancel for stopped alerts
         if (data.alerts_active && data.alerts_active.length > 0) {
-            this.statistics.totalDetections++;
-            this.statistics.mostActiveRegion = data.alerts_active[0];
+            // Handle alert delay logic (statistics updated in triggerAlert)
+            this.handleAlertDelays(data.alerts_active);
+        } else {
+            // No alerts active - cancel all pending delays and count mindful stops
+            this.handleStoppedTouches();
         }
         
         // Update live status display
@@ -639,13 +661,318 @@ class MindfulTouchApp {
             overlay.appendChild(contactInfo);
         }
         
-        // Add visual flash effect for alerts
-        if (alertsActive.length > 0) {
+        // Visual flash is now handled by triggerOverlayFlash() method
+    }
+    
+    // Notification settings event listeners
+    setupNotificationListeners() {
+        // Notification enabled toggle
+        const notificationToggle = document.getElementById('notifications-enabled');
+        notificationToggle.addEventListener('change', (e) => {
+            this.notificationSettings.enabled = e.target.checked;
+        });
+        
+        // Sound enabled toggle
+        const soundToggle = document.getElementById('sound-enabled');
+        soundToggle.addEventListener('change', (e) => {
+            this.notificationSettings.soundEnabled = e.target.checked;
+        });
+        
+        // Delay slider
+        const delaySlider = document.getElementById('notification-delay');
+        const delayValue = document.getElementById('delay-value');
+        delaySlider.addEventListener('input', (e) => {
+            this.notificationSettings.delaySeconds = parseInt(e.target.value);
+            delayValue.textContent = `${e.target.value}s`;
+        });
+        
+        // Sound selection buttons
+        const soundSelectButtons = document.querySelectorAll('.sound-select-button');
+        soundSelectButtons.forEach(button => {
+            button.addEventListener('click', (e) => {
+                // Remove active class from all buttons
+                soundSelectButtons.forEach(btn => btn.classList.remove('active'));
+                // Add active class to clicked button
+                e.target.classList.add('active');
+                // Update selected sound
+                this.notificationSettings.selectedSound = e.target.dataset.sound;
+            });
+        });
+        
+        // Test sound button
+        const testButton = document.getElementById('test-sound-btn');
+        testButton.addEventListener('click', () => {
+            this.playTestSound(this.notificationSettings.selectedSound);
+        });
+        
+        // Initialize audio context
+        this.initializeAudio();
+    }
+    
+    // Initialize audio context and create sound buffers
+    async initializeAudio() {
+        try {
+            this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            
+            // Create different sound frequencies for testing
+            await this.createSoundBuffers();
+        } catch (error) {
+            console.warn('Audio initialization failed:', error);
+        }
+    }
+    
+    // Create sound buffers for different notification sounds
+    async createSoundBuffers() {
+        const sampleRate = this.audioContext.sampleRate;
+        
+        // Chime sound (multiple frequencies)
+        const chimeBuffer = this.audioContext.createBuffer(1, sampleRate * 0.5, sampleRate);
+        const chimeData = chimeBuffer.getChannelData(0);
+        for (let i = 0; i < chimeData.length; i++) {
+            const t = i / sampleRate;
+            chimeData[i] = Math.sin(2 * Math.PI * 800 * t) * Math.exp(-t * 3) * 0.3 +
+                          Math.sin(2 * Math.PI * 1200 * t) * Math.exp(-t * 4) * 0.2;
+        }
+        this.soundBuffers.chime = chimeBuffer;
+        
+        // Beep sound (single frequency)
+        const beepBuffer = this.audioContext.createBuffer(1, sampleRate * 0.3, sampleRate);
+        const beepData = beepBuffer.getChannelData(0);
+        for (let i = 0; i < beepData.length; i++) {
+            const t = i / sampleRate;
+            beepData[i] = Math.sin(2 * Math.PI * 600 * t) * 0.3;
+        }
+        this.soundBuffers.beep = beepBuffer;
+        
+        // Gentle sound (soft sine wave)
+        const gentleBuffer = this.audioContext.createBuffer(1, sampleRate * 0.8, sampleRate);
+        const gentleData = gentleBuffer.getChannelData(0);
+        for (let i = 0; i < gentleData.length; i++) {
+            const t = i / sampleRate;
+            gentleData[i] = Math.sin(2 * Math.PI * 440 * t) * Math.exp(-t * 2) * 0.2 +
+                           Math.sin(2 * Math.PI * 880 * t) * Math.exp(-t * 3) * 0.1;
+        }
+        this.soundBuffers.gentle = gentleBuffer;
+    }
+    
+    // Play test sound
+    playTestSound(soundType) {
+        if (!this.audioContext || !this.soundBuffers[soundType]) return;
+        
+        // Resume audio context if suspended (required for user interaction)
+        if (this.audioContext.state === 'suspended') {
+            this.audioContext.resume();
+        }
+        
+        const source = this.audioContext.createBufferSource();
+        source.buffer = this.soundBuffers[soundType];
+        source.connect(this.audioContext.destination);
+        source.start();
+    }
+    
+    // Handle alert delays - start timers for new regions, maintain existing ones
+    handleAlertDelays(alertRegions) {
+        const delayMs = this.notificationSettings.delaySeconds * 1000;
+        
+        alertRegions.forEach(region => {
+            // If this region is not already in delay or alerting, start delay timer
+            if (!this.alertDelayTimeouts.has(region) && !this.activeAlerts.has(region)) {
+                
+                if (delayMs === 0) {
+                    // No delay - trigger immediately
+                    this.triggerAlert([region]);
+                } else {
+                    // Start delay timer
+                    const timeoutId = setTimeout(() => {
+                        this.alertDelayTimeouts.delete(region);
+                        this.triggerAlert([region]);
+                    }, delayMs);
+                    
+                    this.alertDelayTimeouts.set(region, timeoutId);
+                }
+            }
+        });
+        
+        // Cancel delays for regions that are no longer active
+        for (const [region, timeoutId] of this.alertDelayTimeouts.entries()) {
+            if (!alertRegions.includes(region)) {
+                clearTimeout(timeoutId);
+                this.alertDelayTimeouts.delete(region);
+            }
+        }
+        
+        // Remove from active alerts if no longer detected
+        for (const region of this.activeAlerts) {
+            if (!alertRegions.includes(region)) {
+                this.activeAlerts.delete(region);
+            }
+        }
+    }
+    
+    // Cancel all alert delays
+    cancelAllAlertDelays() {
+        // Clear all timeout timers
+        for (const [region, timeoutId] of this.alertDelayTimeouts.entries()) {
+            clearTimeout(timeoutId);
+        }
+        this.alertDelayTimeouts.clear();
+        this.activeAlerts.clear();
+    }
+    
+    // Handle stopped touches (positive reinforcement)
+    handleStoppedTouches() {
+        // Count mindful stops only if there were pending delays
+        if (this.alertDelayTimeouts.size > 0) {
+            this.statistics.mindfulStops++;
+            
+            // Show positive notification
+            if (this.notificationSettings.enabled) {
+                this.showPositiveNotification();
+            }
+        }
+        
+        // Cancel all pending delays
+        this.cancelAllAlertDelays();
+    }
+    
+    // Trigger the actual alert (after delay)
+    triggerAlert(alertRegions) {
+        // Add to active alerts
+        alertRegions.forEach(region => this.activeAlerts.add(region));
+        
+        // Count as actual detection (only when alert actually fires)
+        this.statistics.totalDetections++;
+        
+        // Show visual notification if enabled
+        if (this.notificationSettings.enabled) {
+            this.showNotification(alertRegions);
+        }
+        
+        // Play sound if enabled
+        if (this.notificationSettings.soundEnabled && this.notificationSettings.enabled) {
+            this.playTestSound(this.notificationSettings.selectedSound);
+        }
+        
+        // Trigger visual flash in overlay
+        this.triggerOverlayFlash();
+    }
+    
+    // Trigger visual flash effect in detection overlay
+    triggerOverlayFlash() {
+        const overlay = document.getElementById('detection-overlay');
+        if (overlay) {
             overlay.style.backgroundColor = 'rgba(239, 68, 68, 0.9)';
             setTimeout(() => {
                 overlay.style.backgroundColor = 'rgba(0, 0, 0, 0.8)';
             }, 200);
         }
+    }
+    
+    // Show visual notification
+    showNotification(alertRegions) {
+        const notification = document.createElement('div');
+        notification.className = 'touch-notification';
+        notification.innerHTML = `
+            <div class="notification-content">
+                <div class="notification-icon">⚠️</div>
+                <div class="notification-text">
+                    <strong>Touch Detected!</strong>
+                    <br>Region: ${alertRegions.join(', ')}
+                </div>
+            </div>
+        `;
+        notification.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            color: white;
+            padding: 1rem;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(239, 68, 68, 0.3);
+            z-index: 1000;
+            animation: slideIn 0.3s ease-out;
+            max-width: 300px;
+            font-size: 14px;
+        `;
+        
+        // Add animation keyframes if not already present
+        if (!document.querySelector('#notification-animations')) {
+            const style = document.createElement('style');
+            style.id = 'notification-animations';
+            style.textContent = `
+                @keyframes slideIn {
+                    from { transform: translateX(100%); opacity: 0; }
+                    to { transform: translateX(0); opacity: 1; }
+                }
+                @keyframes slideOut {
+                    from { transform: translateX(0); opacity: 1; }
+                    to { transform: translateX(100%); opacity: 0; }
+                }
+                .notification-content {
+                    display: flex;
+                    align-items: center;
+                    gap: 12px;
+                }
+                .notification-icon {
+                    font-size: 24px;
+                }
+            `;
+            document.head.appendChild(style);
+        }
+        
+        document.body.appendChild(notification);
+        
+        // Remove notification after 3 seconds
+        setTimeout(() => {
+            notification.style.animation = 'slideOut 0.3s ease-in';
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    document.body.removeChild(notification);
+                }
+            }, 300);
+        }, 3000);
+    }
+    
+    // Show positive reinforcement notification
+    showPositiveNotification() {
+        const notification = document.createElement('div');
+        notification.className = 'touch-notification positive';
+        notification.innerHTML = `
+            <div class="notification-content">
+                <div class="notification-icon">✅</div>
+                <div class="notification-text">
+                    <strong>Mindful Moment!</strong>
+                    <br>Great awareness stopping yourself
+                </div>
+            </div>
+        `;
+        notification.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+            padding: 1rem;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(16, 185, 129, 0.3);
+            z-index: 1000;
+            animation: slideIn 0.3s ease-out;
+            max-width: 300px;
+            font-size: 14px;
+        `;
+        
+        document.body.appendChild(notification);
+        
+        // Remove notification after 2.5 seconds (shorter than alert notifications)
+        setTimeout(() => {
+            notification.style.animation = 'slideOut 0.3s ease-in';
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    document.body.removeChild(notification);
+                }
+            }, 300);
+        }, 2500);
     }
 }
 
