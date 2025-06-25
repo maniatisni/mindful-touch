@@ -104,6 +104,26 @@ cd frontend/src-tauri
 cargo tauri build
 ```
 
+### Installing Production Builds
+
+**Linux (AppImage/DEB):**
+- Download from [releases](../../releases)
+- AppImage: `chmod +x Mindful-Touch.AppImage && ./Mindful-Touch.AppImage`
+- DEB: `sudo dpkg -i mindful-touch_*.deb`
+
+**Windows (MSI/NSIS):**
+- Download from [releases](../../releases)
+- Run the installer (`.msi` or `.exe`)
+
+**macOS (DMG/APP):**
+- Download from [releases](../../releases)
+- Open the DMG and drag to Applications
+- **Important**: On first run, you'll see a security warning. Run this command to allow the app:
+  ```bash
+  sudo xattr -c "/Applications/Mindful Touch.app"
+  ```
+- Alternatively, right-click the app and select "Open" from the context menu
+
 ### Running Tests
 ```bash
 # Python tests

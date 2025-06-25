@@ -32,6 +32,11 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
+    "resources": [
+      "../../backend/**/*",
+      "../../pyproject.toml",
+      "../../uv.lock"
+    ],
     "publisher": "Nikos Maniatis",
     "category": "Productivity",
     "shortDescription": "A gentle awareness tool for mindful hand movement tracking",

@@ -16,7 +16,7 @@ fn greet(name: &str) -> String {
 }
 
 #[tauri::command]
-async fn start_python_backend() -> Result<String, String> {
+async fn start_python_backend(app: tauri::AppHandle) -> Result<String, String> {
     // Check if backend is already running
     {
         let mut process_guard = PYTHON_PROCESS.lock().unwrap();
@@ -37,19 +37,28 @@ async fn start_python_backend() -> Result<String, String> {
         }
     }
 
-    // Starting Python backend
-
-    // Try different paths to find the project root
-    let possible_paths = vec![
-        "../../",       // From frontend/src-tauri/ (dev mode)
-        "../../../../", // From frontend/src-tauri/target/debug/ (built app)
-        "../../../",    // Alternative path
-        "./",           // Same directory
-    ];
+    // Try to find the backend in different locations
+    let mut possible_paths = vec![];
+    
+    // In production, try the app's resource directory first
+    if let Ok(resource_dir) = app.path().resource_dir() {
+        possible_paths.push(resource_dir.to_string_lossy().to_string());
+    }
+    
+    // Development paths
+    possible_paths.extend(vec![
+        "../../".to_string(),       // From frontend/src-tauri/ (dev mode)
+        "../../../../".to_string(), // From frontend/src-tauri/target/debug/ (built app)
+        "../../../".to_string(),    // Alternative path
+        "./".to_string(),           // Same directory
+    ]);
 
     for path in possible_paths {
-        let backend_dir = format!("{}backend", path);
-        if !std::path::Path::new(&backend_dir).exists() {
+        let backend_dir = format!("{}/backend", path);
+        let pyproject_file = format!("{}/pyproject.toml", path);
+        
+        // Check if both backend directory and pyproject.toml exist
+        if !std::path::Path::new(&backend_dir).exists() || !std::path::Path::new(&pyproject_file).exists() {
             continue;
         }
 
@@ -61,7 +70,7 @@ async fn start_python_backend() -> Result<String, String> {
             "backend.detection.main",
             "--headless",
         ])
-        .current_dir(path)
+        .current_dir(&path)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
 
@@ -85,15 +94,17 @@ async fn start_python_backend() -> Result<String, String> {
                 // Wait for backend to initialize
                 thread::sleep(Duration::from_millis(3000));
 
-                return Ok("Python backend started successfully".to_string());
+                return Ok(format!("Python backend started successfully from path: {}", path));
             }
-            Err(_) => {
+            Err(e) => {
+                // Log the error for debugging but continue trying other paths
+                eprintln!("Failed to start backend from {}: {}", path, e);
                 continue;
             }
         }
     }
 
-    Err("Failed to start Python backend from any path".to_string())
+    Err("Failed to start Python backend from any path. Make sure Python and uv are installed.".to_string())
 }
 
 #[tauri::command]
