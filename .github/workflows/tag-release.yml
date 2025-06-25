@@ -76,6 +76,19 @@ jobs:
       - name: Install Python dependencies
         run: uv sync
       
+      - name: Build standalone Python backend
+        run: |
+          echo "Building standalone backend executable..."
+          uv run pyinstaller backend_standalone.spec --clean --noconfirm
+          echo "Backend executable created successfully"
+          # Copy executable to frontend resources for bundling
+          mkdir -p frontend/src-tauri/resources
+          if [[ "${{ matrix.os }}" == "windows" ]]; then
+            cp dist/mindful-touch-backend.exe frontend/src-tauri/resources/
+          else
+            cp dist/mindful-touch-backend frontend/src-tauri/resources/
+          fi
+      
       - name: Install Tauri CLI
         run: cargo install tauri-cli --locked
       
@@ -101,13 +114,23 @@ jobs:
           cargo tauri build ${{ matrix.args }}
       
       # Debug: List generated files
-      - name: List generated bundle files
+      - name: List generated bundle files (Unix)
+        if: matrix.os != 'windows'
         working-directory: frontend/src-tauri
         run: |
           echo "=== Listing all target directories ==="
           find target -name "bundle" -type d 2>/dev/null || echo "No bundle directories found"
           echo "=== Listing all bundle contents ==="
           find target -path "*/bundle/*" -type f 2>/dev/null || echo "No bundle files found"
+      
+      - name: List generated bundle files (Windows)
+        if: matrix.os == 'windows'
+        working-directory: frontend/src-tauri
+        run: |
+          echo "=== Listing all target directories ==="
+          Get-ChildItem -Path target -Recurse -Directory -Name bundle -ErrorAction SilentlyContinue
+          echo "=== Listing all bundle contents ==="
+          Get-ChildItem -Path target -Recurse -File | Where-Object { $_.FullName -like "*bundle*" } | Select-Object FullName
       
       # Upload artifacts for release
       - name: Upload Release Artifacts

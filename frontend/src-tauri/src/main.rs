@@ -37,23 +37,66 @@ async fn start_python_backend(app: tauri::AppHandle) -> Result<String, String> {
         }
     }
 
-    // Try to find the backend in different locations
-    let mut possible_paths = vec![];
+    // Try to find the backend executable in different locations
+    let mut possible_executables = vec![];
     
     // In production, try the app's resource directory first
     if let Ok(resource_dir) = app.path().resource_dir() {
-        possible_paths.push(resource_dir.to_string_lossy().to_string());
+        let resource_path = resource_dir.to_string_lossy().to_string();
+        #[cfg(windows)]
+        possible_executables.push(format!("{}/mindful-touch-backend.exe", resource_path));
+        #[cfg(not(windows))]
+        possible_executables.push(format!("{}/mindful-touch-backend", resource_path));
     }
     
-    // Development paths
-    possible_paths.extend(vec![
+    // Development fallback paths (for dev mode with source code)
+    let dev_paths = vec![
         "../../".to_string(),       // From frontend/src-tauri/ (dev mode)
         "../../../../".to_string(), // From frontend/src-tauri/target/debug/ (built app)
         "../../../".to_string(),    // Alternative path
         "./".to_string(),           // Same directory
-    ]);
+    ];
 
-    for path in possible_paths {
+    // First, try to run the standalone executable
+    for executable_path in possible_executables {
+        if std::path::Path::new(&executable_path).exists() {
+            let mut cmd = Command::new(&executable_path);
+            cmd.args(["--headless"])
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped());
+
+            // On Unix systems, create a new process group so we can kill all child processes
+            #[cfg(unix)]
+            {
+                use std::os::unix::process::CommandExt;
+                cmd.process_group(0);
+            }
+
+            let child = cmd.spawn();
+
+            match child {
+                Ok(child) => {
+                    // Store the process
+                    {
+                        let mut process_guard = PYTHON_PROCESS.lock().unwrap();
+                        *process_guard = Some(child);
+                    }
+
+                    // Wait for backend to initialize
+                    thread::sleep(Duration::from_millis(3000));
+
+                    return Ok(format!("Standalone backend started successfully from: {}", executable_path));
+                }
+                Err(e) => {
+                    eprintln!("Failed to start standalone backend from {}: {}", executable_path, e);
+                    continue;
+                }
+            }
+        }
+    }
+
+    // Fallback: try development mode with source code (if standalone executable not found)
+    for path in dev_paths {
         let backend_dir = format!("{}/backend", path);
         let pyproject_file = format!("{}/pyproject.toml", path);
         
@@ -94,17 +137,17 @@ async fn start_python_backend(app: tauri::AppHandle) -> Result<String, String> {
                 // Wait for backend to initialize
                 thread::sleep(Duration::from_millis(3000));
 
-                return Ok(format!("Python backend started successfully from path: {}", path));
+                return Ok(format!("Development backend started successfully from path: {}", path));
             }
             Err(e) => {
                 // Log the error for debugging but continue trying other paths
-                eprintln!("Failed to start backend from {}: {}", path, e);
+                eprintln!("Failed to start development backend from {}: {}", path, e);
                 continue;
             }
         }
     }
 
-    Err("Failed to start Python backend from any path. Make sure Python and uv are installed.".to_string())
+    Err("Failed to start backend. Standalone executable not found and development environment not available.".to_string())
 }
 
 #[tauri::command]

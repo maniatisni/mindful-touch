@@ -33,9 +33,7 @@
       "icons/icon.ico"
     ],
     "resources": [
-      "../../backend/**/*",
-      "../../pyproject.toml",
-      "../../uv.lock"
+      "resources/*"
     ],
     "publisher": "Nikos Maniatis",
     "category": "Productivity",
