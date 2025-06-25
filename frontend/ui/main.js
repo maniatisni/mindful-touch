@@ -716,9 +716,28 @@ class MindfulTouchApp {
             
             // Create different sound frequencies for testing
             await this.createSoundBuffers();
+            
+            // Add one-time user interaction listener to unlock audio
+            this.addAudioUnlockListener();
         } catch (error) {
             console.warn('Audio initialization failed:', error);
         }
+    }
+    
+    // Add listener to unlock audio on first user interaction
+    addAudioUnlockListener() {
+        const unlockAudio = async () => {
+            if (this.audioContext && this.audioContext.state === 'suspended') {
+                await this.audioContext.resume();
+                console.log('Audio context unlocked via user interaction');
+            }
+            // Remove listener after first use
+            document.removeEventListener('click', unlockAudio);
+            document.removeEventListener('keydown', unlockAudio);
+        };
+        
+        document.addEventListener('click', unlockAudio, { once: true });
+        document.addEventListener('keydown', unlockAudio, { once: true });
     }
     
     // Create sound buffers for different notification sounds
@@ -756,18 +775,23 @@ class MindfulTouchApp {
     }
     
     // Play test sound
-    playTestSound(soundType) {
+    async playTestSound(soundType) {
         if (!this.audioContext || !this.soundBuffers[soundType]) return;
         
-        // Resume audio context if suspended (required for user interaction)
-        if (this.audioContext.state === 'suspended') {
-            this.audioContext.resume();
+        try {
+            // Resume audio context if suspended (standard browser behavior)
+            if (this.audioContext.state === 'suspended') {
+                await this.audioContext.resume();
+            }
+            
+            const source = this.audioContext.createBufferSource();
+            source.buffer = this.soundBuffers[soundType];
+            source.connect(this.audioContext.destination);
+            source.start();
+            
+        } catch (error) {
+            console.error('Error playing sound:', error);
         }
-        
-        const source = this.audioContext.createBufferSource();
-        source.buffer = this.soundBuffers[soundType];
-        source.connect(this.audioContext.destination);
-        source.start();
     }
     
     // Handle alert delays - start timers for new regions, maintain existing ones
@@ -848,8 +872,8 @@ class MindfulTouchApp {
             this.showNotification(alertRegions);
         }
         
-        // Play sound if enabled
-        if (this.notificationSettings.soundEnabled && this.notificationSettings.enabled) {
+        // Play sound if enabled (independent of visual notifications)
+        if (this.notificationSettings.soundEnabled) {
             this.playTestSound(this.notificationSettings.selectedSound);
         }
         
