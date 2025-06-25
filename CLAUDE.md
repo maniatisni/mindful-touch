@@ -162,20 +162,82 @@ cargo tauri dev
 
 ## Next Steps & Roadmap
 
+### 🔧 CURRENT SESSION STATUS (June 25, 2025)
+
+**BRANCH**: `fix/production-builds` (ahead of origin by commits)
+**TAG**: `v1.0.0-test` (triggers GitHub Actions build on push)
+
+**CRITICAL ISSUE IN PROGRESS: macOS Backend Executable Not Found**
+
+**Problem**: Built macOS app shows error: "Failed to start detection: Failed to start backend. Standalone executable not found and development environment not available."
+
+**Root Cause Analysis**:
+1. ✅ GitHub Actions builds PyInstaller executable successfully
+2. ✅ Copies `mindful-touch-backend` to `frontend/src-tauri/resources/`
+3. ❌ Tauri app cannot find the executable at runtime
+4. ❌ Rust code resource path resolution failing
+
+**Current State**: 
+- PyInstaller spec file: `backend_standalone.spec` ✅ (removed from .gitignore)
+- GitHub Actions workflow: Fixed Windows PowerShell syntax ✅
+- Tauri config: Resources point to `resources/*` ✅
+- Rust backend detection: Looks in `resource_dir()` first ✅
+
+**IMMEDIATE NEXT STEPS**:
+1. **Debug macOS Resource Path**: Add logging to Rust code to see actual resource directory path
+2. **Verify Bundle Structure**: Check if backend executable is actually included in .app bundle
+3. **Fix Resource Resolution**: Ensure Tauri properly bundles the executable in the correct location
+4. **Test Path Variations**: Try different resource path patterns for macOS
+
+**TO CONTINUE DEVELOPMENT**:
+```bash
+# Switch to working branch
+git checkout fix/production-builds
+
+# To retrigger GitHub Actions build:
+git tag -d v1.0.0-test
+git push origin :refs/tags/v1.0.0-test
+git tag v1.0.0-test
+git push origin v1.0.0-test
+
+# OR push any new commits to trigger build via branch
+git push origin fix/production-builds
+```
+
+**FILES MODIFIED IN THIS SESSION**:
+- `.github/workflows/tag-release.yml`: Fixed PyInstaller integration + Windows PowerShell syntax
+- `.gitignore`: Removed `*.spec` exclusions  
+- `backend_standalone.spec`: PyInstaller configuration ✅
+- `backend_entry.py`: Standalone entry point ✅
+- `frontend/src-tauri/tauri.conf.json`: Resource bundling config
+- `frontend/src-tauri/src/main.rs`: Enhanced backend path resolution
+
+**DEBUGGING PLAN**:
+1. Add debug logging to Rust backend detection code
+2. Inspect actual .app bundle contents manually
+3. Test different resource path patterns
+4. Verify executable permissions in bundle
+5. Consider alternative bundling approaches if needed
+
 ### 🔧 NEXT SESSION PRIORITIES (Production Release Issues)
 
-**CRITICAL PRIORITY 1: Fix Production Build & Distribution Issues**
-- **macOS Distribution**: Python backend not found after build - fix backend bundling/path resolution
-- **Windows Build Failure**: Fix RC2175 icon format error in Windows build process  
-- **Code Signing**: Implement proper code signing for macOS to avoid `xattr -c` requirement
-- **CI/CD Optimization**: Simplify GitHub Actions workflow using matrix builds for all 3 platforms
-- **Backend Packaging**: Ensure Python backend and dependencies are properly bundled in production builds
+**CRITICAL PRIORITY 1: Fix macOS Backend Executable Resolution** ⚠️ **IN PROGRESS**
+- Debug why Tauri resource_dir() doesn't contain the backend executable
+- Verify PyInstaller executable is properly bundled in macOS .app
+- Fix Rust path resolution for production vs development
+- Test different resource bundling configurations
 
-**CRITICAL PRIORITY 2: Cross-Platform Testing & Validation**
-- Test Linux build functionality and fix any platform-specific issues
-- Validate backend process management works correctly on all platforms in production builds
+**CRITICAL PRIORITY 2: Complete Production Build Pipeline**
+- **Windows Build**: Verify executable bundling works correctly
+- **Linux Build**: Test AppImage/Deb packaging with backend
+- **Code Signing**: Implement proper code signing for macOS distribution
+- **CI/CD Validation**: Add automated testing for production builds
+
+**CRITICAL PRIORITY 3: Cross-Platform Validation**
+- Validate backend process management on all platforms in production
 - Ensure proper error handling when Python backend fails to start
-- Add automated testing for production builds in CI/CD
+- Test resource usage and performance in production builds
+- Add comprehensive logging for debugging distribution issues
 
 ### 🎯 Immediate Next Tasks (After Build Issues Resolved)
 
