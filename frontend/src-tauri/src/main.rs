@@ -12,7 +12,7 @@ static PYTHON_PROCESS: Mutex<Option<Child>> = Mutex::new(None);
 
 #[tauri::command]
 fn greet(name: &str) -> String {
-    format!("Hello, {}! You've been greeted from Rust!", name)
+    format!("Hello, {name}! You've been greeted from Rust!")
 }
 
 #[tauri::command]
@@ -48,7 +48,7 @@ async fn start_python_backend() -> Result<String, String> {
     ];
 
     for path in possible_paths {
-        let backend_dir = format!("{}backend", path);
+        let backend_dir = format!("{path}backend");
         if !std::path::Path::new(&backend_dir).exists() {
             continue;
         }
@@ -124,7 +124,7 @@ fn cleanup_python_process() -> Result<String, String> {
 
                 Ok("Python backend stopped successfully".to_string())
             }
-            Err(e) => Err(format!("Failed to stop backend: {}", e)),
+            Err(e) => Err(format!("Failed to stop backend: {e}")),
         }
     } else {
         Ok("No Python backend process running".to_string())
@@ -133,7 +133,7 @@ fn cleanup_python_process() -> Result<String, String> {
 
 #[tauri::command]
 async fn toggle_region(region: String) -> Result<String, String> {
-    Ok(format!("Toggled region: {}", region))
+    Ok(format!("Toggled region: {region}"))
 }
 
 fn main() {
