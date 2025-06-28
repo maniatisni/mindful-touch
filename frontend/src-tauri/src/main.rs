@@ -49,6 +49,19 @@ async fn start_python_backend(app: tauri::AppHandle) -> Result<String, String> {
         possible_executables.push(format!("{resource_path}/mindful-touch-backend"));
     }
     
+    // Additional fallback: resolve path relative to current executable
+    if let Ok(current_exe) = std::env::current_exe() {
+        if let Some(exe_dir) = current_exe.parent() {
+            let exe_dir = exe_dir.to_path_buf();
+            #[cfg(windows)]
+            possible_executables.push(format!("{}/mindful-touch-backend.exe", exe_dir.display()));
+            #[cfg(target_os = "macos")]
+            possible_executables.push(format!("{}/../Resources/mindful-touch-backend", exe_dir.display()));
+            #[cfg(all(unix, not(target_os = "macos")))]
+            possible_executables.push(format!("{}/resources/mindful-touch-backend", exe_dir.display()));
+        }
+    }
+
     // Development fallback paths (for dev mode with source code)
     let dev_paths = vec![
         "../../".to_string(),       // From frontend/src-tauri/ (dev mode)
