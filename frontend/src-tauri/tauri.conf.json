@@ -1,9 +1,9 @@
 {
   "productName": "Mindful Touch",
   "version": "0.1.0",
-  "identifier": "com.mindfultouch.app",
+  "identifier": "com.mindfultouch",
   "build": {
-    "beforeBuildCommand": "python ../../backend_entry.py --build",
+    "beforeBuildCommand": "cd ../../ && python backend_entry.py --build",
     "frontendDist": "../ui"
   },
   "app": {
