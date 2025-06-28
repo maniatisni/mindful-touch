@@ -3,7 +3,6 @@
   "version": "0.1.0",
   "identifier": "com.mindfultouch",
   "build": {
-    "beforeBuildCommand": "cd ../../ && python backend_entry.py --build",
     "frontendDist": "../ui"
   },
   "app": {
