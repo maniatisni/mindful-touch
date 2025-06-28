@@ -34,22 +34,14 @@ async fn stop_python_backend() -> Result<String, String> {
 
 fn cleanup_python_process() -> Result<String, String> {
     let mut process_guard = PYTHON_PROCESS.lock().unwrap();
-    if let Some(mut child) = process_guard.take() {
+    if let Some(child) = process_guard.take() {
         // First try to terminate gracefully
+        let pid = child.pid() as i32; // Get pid before child is moved by kill()
         match child.kill() {
             Ok(_) => {
-                // Wait for process to actually exit
-                for _ in 0..50 { // 5 seconds
-                    if let Ok(Some(_)) = child.try_wait() {
-                        break;
-                    }
-                    std::thread::sleep(Duration::from_millis(100));
-                }
-
                 // On Unix systems, also kill the process group to ensure all child processes are terminated
                 #[cfg(unix)]
                 {
-                    let pid = child.pid() as i32;
                     unsafe {
                         // Kill the entire process group
                         libc::killpg(pid, libc::SIGTERM);
@@ -57,7 +49,6 @@ fn cleanup_python_process() -> Result<String, String> {
                         libc::killpg(pid, libc::SIGKILL);
                     }
                 }
-
                 Ok("Python backend stopped successfully".to_string())
             }
             Err(e) => Err(format!("Failed to stop backend: {e}")),
