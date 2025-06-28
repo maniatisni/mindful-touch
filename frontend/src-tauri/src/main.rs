@@ -12,7 +12,7 @@ static PYTHON_PROCESS: Mutex<Option<Child>> = Mutex::new(None);
 
 #[tauri::command]
 fn greet(name: &str) -> String {
-    format!("Hello, {}! You've been greeted from Rust!", name)
+    format!("Hello, {name}! You've been greeted from Rust!")
 }
 
 #[tauri::command]
@@ -44,9 +44,9 @@ async fn start_python_backend(app: tauri::AppHandle) -> Result<String, String> {
     if let Ok(resource_dir) = app.path().resource_dir() {
         let resource_path = resource_dir.to_string_lossy().to_string();
         #[cfg(windows)]
-        possible_executables.push(format!("{}/mindful-touch-backend.exe", resource_path));
+        possible_executables.push(format!("{resource_path}/mindful-touch-backend.exe"));
         #[cfg(not(windows))]
-        possible_executables.push(format!("{}/mindful-touch-backend", resource_path));
+        possible_executables.push(format!("{resource_path}/mindful-touch-backend"));
     }
     
     // Development fallback paths (for dev mode with source code)
@@ -85,10 +85,10 @@ async fn start_python_backend(app: tauri::AppHandle) -> Result<String, String> {
                     // Wait for backend to initialize
                     thread::sleep(Duration::from_millis(3000));
 
-                    return Ok(format!("Standalone backend started successfully from: {}", executable_path));
+                    return Ok(format!("Standalone backend started successfully from: {executable_path}"));
                 }
                 Err(e) => {
-                    eprintln!("Failed to start standalone backend from {}: {}", executable_path, e);
+                    eprintln!("Failed to start standalone backend from {executable_path}: {e}");
                     continue;
                 }
             }
@@ -97,8 +97,8 @@ async fn start_python_backend(app: tauri::AppHandle) -> Result<String, String> {
 
     // Fallback: try development mode with source code (if standalone executable not found)
     for path in dev_paths {
-        let backend_dir = format!("{}/backend", path);
-        let pyproject_file = format!("{}/pyproject.toml", path);
+        let backend_dir = format!("{path}/backend");
+        let pyproject_file = format!("{path}/pyproject.toml");
         
         // Check if both backend directory and pyproject.toml exist
         if !std::path::Path::new(&backend_dir).exists() || !std::path::Path::new(&pyproject_file).exists() {
@@ -137,11 +137,11 @@ async fn start_python_backend(app: tauri::AppHandle) -> Result<String, String> {
                 // Wait for backend to initialize
                 thread::sleep(Duration::from_millis(3000));
 
-                return Ok(format!("Development backend started successfully from path: {}", path));
+                return Ok(format!("Development backend started successfully from path: {path}"));
             }
             Err(e) => {
                 // Log the error for debugging but continue trying other paths
-                eprintln!("Failed to start development backend from {}: {}", path, e);
+                eprintln!("Failed to start development backend from {path}: {e}");
                 continue;
             }
         }
@@ -178,7 +178,7 @@ fn cleanup_python_process() -> Result<String, String> {
 
                 Ok("Python backend stopped successfully".to_string())
             }
-            Err(e) => Err(format!("Failed to stop backend: {}", e)),
+            Err(e) => Err(format!("Failed to stop backend: {e}")),
         }
     } else {
         Ok("No Python backend process running".to_string())
@@ -187,7 +187,7 @@ fn cleanup_python_process() -> Result<String, String> {
 
 #[tauri::command]
 async fn toggle_region(region: String) -> Result<String, String> {
-    Ok(format!("Toggled region: {}", region))
+    Ok(format!("Toggled region: {region}"))
 }
 
 fn main() {
