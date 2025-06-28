@@ -42,16 +42,5 @@
     "category": "Productivity",
     "shortDescription": "A gentle awareness tool for mindful hand movement tracking",
     "longDescription": "Mindful Touch helps you become more aware of unconscious face-touching habits by providing gentle notifications when your hands approach specific facial regions."
-  },
-  "allowlist": {
-    "shell": {
-      "sidecar": true,
-      "scope": [
-        {
-          "name": "bin/mindful-touch-backend",
-          "sidecar": true
-        }
-      ]
-    }
   }
 }

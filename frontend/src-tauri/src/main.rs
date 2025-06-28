@@ -1,7 +1,7 @@
 // Mindful Touch - Tauri Desktop Application
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use tauri::api::process::{Child, Command, CommandEvent};
+use tauri_plugin_shell::{ShellExt, process::{Command, CommandEvent, Child}};
 use std::sync::Mutex;
 use std::thread;
 use std::time::Duration;
@@ -16,24 +16,16 @@ fn greet(name: &str) -> String {
 }
 
 #[tauri::command]
-async fn start_python_backend(_app: tauri::AppHandle) -> Result<String, String> {
-    // Avoid duplicates
-    {
-        let guard = PYTHON_PROCESS.lock().unwrap();
-        if guard.is_some() {
-            return Ok("Python backend already running".into());
-        }
-    }
-
-    //  Single, cross-platform launch 
-    let (_rx, child) = Command::new_sidecar("bin/mindful-touch-backend")
-        .map_err(|e| e.to_string())?
+async fn start_python_backend(app: tauri::AppHandle) -> Result<(), String> {
+    let (_rx, child) = app
+        .shell()
+        .sidecar("mindful-touch-backend")
+        .unwrap()
         .args(["--headless"])
         .spawn()
         .map_err(|e| e.to_string())?;
-
     *PYTHON_PROCESS.lock().unwrap() = Some(child);
-    Ok("Backend started via sidecar".into())
+    Ok(())
 }
 
 #[tauri::command]
@@ -97,6 +89,7 @@ fn main() {
     }
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_shell::init())
         .invoke_handler(tauri::generate_handler![
             greet,
             start_python_backend,
