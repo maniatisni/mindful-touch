@@ -44,29 +44,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # ---------- Build backend & stage as sidecar ----------
-      - name: Build Python backend and stage as sidecar (Unix)
-        if: matrix.os != 'windows'
-        run: |
-          uv run pyinstaller backend_standalone.spec --clean --noconfirm
-          TARGET=$(rustc -Vv | grep host | cut -d' ' -f2)
-          mkdir -p frontend/src-tauri/bin
-          mv dist/mindful-touch-backend "frontend/src-tauri/bin/mindful-touch-backend-${TARGET}"
-          chmod +x "frontend/src-tauri/bin/mindful-touch-backend-${TARGET}"
-
-      - name: Build Python backend and stage as sidecar (Windows)
-        if: matrix.os == 'windows'
-        shell: pwsh
-        run: |
-          uv run pyinstaller backend_standalone.spec --clean --noconfirm
-          $TARGET = '${{ matrix.rust-target }}'
-          New-Item -ItemType Directory -Force -Path 'frontend/src-tauri/bin'
-          Move-Item 'dist/mindful-touch-backend.exe' "frontend/src-tauri/bin/mindful-touch-backend-$TARGET.exe"
-
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable   # compact action :contentReference[oaicite:4]{index=4}
+        uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.rust-target }}${{ matrix.os == 'macos' && ',aarch64-apple-darwin' || '' }}  # ternary pattern is valid :contentReference[oaicite:5]{index=5}
+          targets: ${{ matrix.rust-target }}${{ matrix.os == 'macos' && ',aarch64-apple-darwin' || '' }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -113,7 +94,7 @@ jobs:
           Move-Item 'dist/mindful-touch-backend.exe' "frontend/src-tauri/bin/mindful-touch-backend-$TARGET.exe"
 
       - name: Install Tauri CLI
-        run: cargo install tauri-cli --locked   # removed stray "" quotes
+        run: cargo install tauri-cli --locked
 
       # ---------- Cache Rust deps ----------
       - name: Cache Rust dependencies
