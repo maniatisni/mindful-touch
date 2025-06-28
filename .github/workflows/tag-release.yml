@@ -76,28 +76,28 @@ jobs:
       - name: Install Python dependencies
         run: uv sync
       
-      - name: Build standalone Python backend
+      """      - name: Build Python backend and stage as sidecar
         run: |
-          echo "Building standalone backend executable..."
           uv run pyinstaller backend_standalone.spec --clean --noconfirm
-          echo "Backend executable created successfully"
+          TARGET=$(rustc -Vv | grep host | cut -d' ' -f2)
+          mkdir -p frontend/src-tauri/bin
+          mv dist/mindful-touch-backend frontend/src-tauri/bin/mindful-touch-backend-${TARGET}
+          chmod +x frontend/src-tauri/bin/mindful-touch-backend-${TARGET}
       
-      - name: Copy backend executable to Tauri resources (Unix)
-        if: matrix.os != 'windows'
-        run: |
-          mkdir -p frontend/src-tauri/resources
-          cp dist/mindful-touch-backend frontend/src-tauri/resources/
-          ls -la frontend/src-tauri/resources/
-      
-      - name: Copy backend executable to Tauri resources (Windows)
+      - name: Build Python backend and stage as sidecar (Windows)
         if: matrix.os == 'windows'
         run: |
-          New-Item -ItemType Directory -Force -Path frontend/src-tauri/resources
-          Copy-Item dist/mindful-touch-backend.exe frontend/src-tauri/resources/
-          Get-ChildItem frontend/src-tauri/resources/
+          uv run pyinstaller backend_standalone.spec --clean --noconfirm
+          $env:TARGET = switch ($env:RUNNER_ARCH) {
+            "X86" { "i686-pc-windows-msvc" }
+            "X64" { "x86_64-pc-windows-msvc" }
+            "ARM64" { "aarch64-pc-windows-msvc" }
+          }
+          New-Item -ItemType Directory -Force -Path frontend/src-tauri/bin
+          Move-Item dist/mindful-touch-backend.exe "frontend/src-tauri/bin/mindful-touch-backend-$env:TARGET.exe"
       
       - name: Install Tauri CLI
-        run: cargo install tauri-cli --locked
+        run: cargo install tauri-cli --locked""
       
       - name: Cache Rust dependencies
         uses: actions/cache@v4

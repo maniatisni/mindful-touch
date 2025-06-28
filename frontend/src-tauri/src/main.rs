@@ -1,7 +1,7 @@
 // Mindful Touch - Tauri Desktop Application
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use std::process::{Child, Command, Stdio};
+use tauri::api::process::{Child, Command, CommandEvent};
 use std::sync::Mutex;
 use std::thread;
 use std::time::Duration;
@@ -16,151 +16,24 @@ fn greet(name: &str) -> String {
 }
 
 #[tauri::command]
-async fn start_python_backend(app: tauri::AppHandle) -> Result<String, String> {
-    // Check if backend is already running
+async fn start_python_backend(_app: tauri::AppHandle) -> Result<String, String> {
+    // Avoid duplicates
     {
-        let mut process_guard = PYTHON_PROCESS.lock().unwrap();
-        if let Some(ref mut child) = *process_guard {
-            match child.try_wait() {
-                Ok(Some(_)) => {
-                    // Process has exited, remove it
-                    *process_guard = None;
-                }
-                Ok(None) => {
-                    // Process is still running
-                    return Ok("Python backend is already running".to_string());
-                }
-                Err(_) => {
-                    *process_guard = None;
-                }
-            }
+        let guard = PYTHON_PROCESS.lock().unwrap();
+        if guard.is_some() {
+            return Ok("Python backend already running".into());
         }
     }
 
-    // Try to find the backend executable in different locations
-    let mut possible_executables = vec![];
-    
-    // In production, try the app's resource directory first
-    if let Ok(resource_dir) = app.path().resource_dir() {
-        let resource_path = resource_dir.to_string_lossy().to_string();
-        #[cfg(windows)]
-        possible_executables.push(format!("{resource_path}/mindful-touch-backend.exe"));
-        #[cfg(not(windows))]
-        possible_executables.push(format!("{resource_path}/mindful-touch-backend"));
-    }
-    
-    // Additional fallback: resolve path relative to current executable
-    if let Ok(current_exe) = std::env::current_exe() {
-        if let Some(exe_dir) = current_exe.parent() {
-            let exe_dir = exe_dir.to_path_buf();
-            #[cfg(windows)]
-            possible_executables.push(format!("{}/mindful-touch-backend.exe", exe_dir.display()));
-            #[cfg(target_os = "macos")]
-            possible_executables.push(format!("{}/../Resources/mindful-touch-backend", exe_dir.display()));
-            #[cfg(all(unix, not(target_os = "macos")))]
-            possible_executables.push(format!("{}/resources/mindful-touch-backend", exe_dir.display()));
-        }
-    }
+    //  Single, cross-platform launch 
+    let (_rx, child) = Command::new_sidecar("bin/mindful-touch-backend")
+        .map_err(|e| e.to_string())?
+        .args(["--headless"])
+        .spawn()
+        .map_err(|e| e.to_string())?;
 
-    // Development fallback paths (for dev mode with source code)
-    let dev_paths = vec![
-        "../../".to_string(),       // From frontend/src-tauri/ (dev mode)
-        "../../../../".to_string(), // From frontend/src-tauri/target/debug/ (built app)
-        "../../../".to_string(),    // Alternative path
-        "./".to_string(),           // Same directory
-    ];
-
-    // First, try to run the standalone executable
-    for executable_path in possible_executables {
-        if std::path::Path::new(&executable_path).exists() {
-            let mut cmd = Command::new(&executable_path);
-            cmd.args(["--headless"])
-                .stdout(Stdio::piped())
-                .stderr(Stdio::piped());
-
-            // On Unix systems, create a new process group so we can kill all child processes
-            #[cfg(unix)]
-            {
-                use std::os::unix::process::CommandExt;
-                cmd.process_group(0);
-            }
-
-            let child = cmd.spawn();
-
-            match child {
-                Ok(child) => {
-                    // Store the process
-                    {
-                        let mut process_guard = PYTHON_PROCESS.lock().unwrap();
-                        *process_guard = Some(child);
-                    }
-
-                    // Wait for backend to initialize
-                    thread::sleep(Duration::from_millis(3000));
-
-                    return Ok(format!("Standalone backend started successfully from: {executable_path}"));
-                }
-                Err(e) => {
-                    eprintln!("Failed to start standalone backend from {executable_path}: {e}");
-                    continue;
-                }
-            }
-        }
-    }
-
-    // Fallback: try development mode with source code (if standalone executable not found)
-    for path in dev_paths {
-        let backend_dir = format!("{path}/backend");
-        let pyproject_file = format!("{path}/pyproject.toml");
-        
-        // Check if both backend directory and pyproject.toml exist
-        if !std::path::Path::new(&backend_dir).exists() || !std::path::Path::new(&pyproject_file).exists() {
-            continue;
-        }
-
-        let mut cmd = Command::new("uv");
-        cmd.args([
-            "run",
-            "python",
-            "-m",
-            "backend.detection.main",
-            "--headless",
-        ])
-        .current_dir(&path)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-
-        // On Unix systems, create a new process group so we can kill all child processes
-        #[cfg(unix)]
-        {
-            use std::os::unix::process::CommandExt;
-            cmd.process_group(0);
-        }
-
-        let child = cmd.spawn();
-
-        match child {
-            Ok(child) => {
-                // Store the process
-                {
-                    let mut process_guard = PYTHON_PROCESS.lock().unwrap();
-                    *process_guard = Some(child);
-                }
-
-                // Wait for backend to initialize
-                thread::sleep(Duration::from_millis(3000));
-
-                return Ok(format!("Development backend started successfully from path: {path}"));
-            }
-            Err(e) => {
-                // Log the error for debugging but continue trying other paths
-                eprintln!("Failed to start development backend from {path}: {e}");
-                continue;
-            }
-        }
-    }
-
-    Err("Failed to start backend. Standalone executable not found and development environment not available.".to_string())
+    *PYTHON_PROCESS.lock().unwrap() = Some(child);
+    Ok("Backend started via sidecar".into())
 }
 
 #[tauri::command]
@@ -175,12 +48,17 @@ fn cleanup_python_process() -> Result<String, String> {
         match child.kill() {
             Ok(_) => {
                 // Wait for process to actually exit
-                let _ = child.wait();
+                for _ in 0..50 { // 5 seconds
+                    if let Ok(Some(_)) = child.try_wait() {
+                        break;
+                    }
+                    std::thread::sleep(Duration::from_millis(100));
+                }
 
                 // On Unix systems, also kill the process group to ensure all child processes are terminated
                 #[cfg(unix)]
                 {
-                    let pid = child.id() as i32;
+                    let pid = child.pid() as i32;
                     unsafe {
                         // Kill the entire process group
                         libc::killpg(pid, libc::SIGTERM);
