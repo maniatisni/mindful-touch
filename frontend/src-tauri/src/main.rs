@@ -1,9 +1,9 @@
 // Mindful Touch - Tauri Desktop Application
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use tauri_plugin_shell::{ShellExt, process::{Command, CommandEvent, Child}};
+use tauri_plugin_shell::ShellExt;
+use std::process::Child;
 use std::sync::Mutex;
-use std::thread;
 use std::time::Duration;
 use tauri::Manager;
 
@@ -50,7 +50,7 @@ fn cleanup_python_process() -> Result<String, String> {
                 // On Unix systems, also kill the process group to ensure all child processes are terminated
                 #[cfg(unix)]
                 {
-                    let pid = child.pid() as i32;
+                    let pid = child.id() as i32;
                     unsafe {
                         // Kill the entire process group
                         libc::killpg(pid, libc::SIGTERM);
