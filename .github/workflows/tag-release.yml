@@ -76,26 +76,23 @@ jobs:
       - name: Install Python dependencies
         run: uv sync
       
-      """      - name: Build Python backend and stage as sidecar
+      """      - name: Build Python backend and stage as sidecar (Unix)
+        if: matrix.os != 'windows'
         run: |
           uv run pyinstaller backend_standalone.spec --clean --noconfirm
           TARGET=$(rustc -Vv | grep host | cut -d' ' -f2)
           mkdir -p frontend/src-tauri/bin
-          mv dist/mindful-touch-backend frontend/src-tauri/bin/mindful-touch-backend-${TARGET}
-          chmod +x frontend/src-tauri/bin/mindful-touch-backend-${TARGET}
-      
+          mv dist/mindful-touch-backend "frontend/src-tauri/bin/mindful-touch-backend-${TARGET}"
+          chmod +x "frontend/src-tauri/bin/mindful-touch-backend-${TARGET}"
+
       - name: Build Python backend and stage as sidecar (Windows)
         if: matrix.os == 'windows'
         run: |
           uv run pyinstaller backend_standalone.spec --clean --noconfirm
-          $env:TARGET = switch ($env:RUNNER_ARCH) {
-            "X86" { "i686-pc-windows-msvc" }
-            "X64" { "x86_64-pc-windows-msvc" }
-            "ARM64" { "aarch64-pc-windows-msvc" }
-          }
-          New-Item -ItemType Directory -Force -Path frontend/src-tauri/bin
-          Move-Item dist/mindful-touch-backend.exe "frontend/src-tauri/bin/mindful-touch-backend-$env:TARGET.exe"
-      
+          $TARGET = "${{ matrix.rust-target }}"
+          New-Item -ItemType Directory -Force -Path "frontend/src-tauri/bin"
+          Move-Item "dist/mindful-touch-backend.exe" "frontend/src-tauri/bin/mindful-touch-backend-$TARGET.exe"
+
       - name: Install Tauri CLI
         run: cargo install tauri-cli --locked""
       
