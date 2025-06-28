@@ -24,21 +24,21 @@ jobs:
               frontend/src-tauri/target/universal-apple-darwin/release/bundle/macos/*.app
               frontend/src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
 
-          - platform: ubuntu-22.04
-            os: linux
-            args: '--target x86_64-unknown-linux-gnu'
-            rust-target: x86_64-unknown-linux-gnu
-            upload-files: |
-              frontend/src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/appimage/*.AppImage
-              frontend/src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/deb/*.deb
-
-          - platform: windows-latest
-            os: windows
-            args: '--target x86_64-pc-windows-msvc'
-            rust-target: x86_64-pc-windows-msvc
-            upload-files: |
-              frontend/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/*.msi
-              frontend/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe
+          #          - platform: ubuntu-22.04
+#            os: linux
+#            args: '--target x86_64-unknown-linux-gnu'
+#            rust-target: x86_64-unknown-linux-gnu
+#            upload-files: |
+#              frontend/src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/appimage/*.AppImage
+#              frontend/src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/deb/*.deb
+#
+#          - platform: windows-latest
+#            os: windows
+#            args: '--target x86_64-pc-windows-msvc'
+#            rust-target: x86_64-pc-windows-msvc
+#            upload-files: |
+#              frontend/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/*.msi
+#              frontend/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe
 
     steps:
       - name: Checkout repository
