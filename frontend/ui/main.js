@@ -414,10 +414,10 @@ class MindfulTouchApp {
     updateConnectionStatus(isConnected) {
         const statusElement = document.getElementById('connection-status');
         if (isConnected) {
-            statusElement.textContent = 'Connected';
+            statusElement.textContent = 'Active';
             statusElement.className = 'status-indicator online';
         } else {
-            statusElement.textContent = 'Offline';
+            statusElement.textContent = 'Ready';
             statusElement.className = 'status-indicator offline';
         }
     }
