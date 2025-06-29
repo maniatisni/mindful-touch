@@ -21,8 +21,8 @@ jobs:
             args: ''
             rust-target: aarch64-apple-darwin
             upload-files: |
-              frontend/src-tauri/target/aarch64-apple-darwin/release/bundle/macos/*.app
-              frontend/src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg
+              frontend/src-tauri/target/release/bundle/macos/*.app
+              frontend/src-tauri/target/release/bundle/dmg/*.dmg
 
           #          - platform: ubuntu-22.04
 #            os: linux
@@ -133,10 +133,14 @@ jobs:
         if: matrix.os != 'windows'
         working-directory: frontend/src-tauri
         run: |
+          echo '=== target directory structure ==='
+          find target -type d | head -20
           echo '=== bundle dirs ==='
           find target -name bundle -type d 2>/dev/null || echo 'none'
           echo '=== bundle contents ==='
-          find target -path '*/bundle/*' -type f 2>/dev/null || echo 'none'
+          find target -path '*/bundle/*' -name '*.app' -o -name '*.dmg' 2>/dev/null || echo 'none'
+          echo '=== all app and dmg files ==='
+          find target -name '*.app' -o -name '*.dmg' 2>/dev/null || echo 'none'
 
       - name: List generated bundle files (Windows)
         if: matrix.os == 'windows'
