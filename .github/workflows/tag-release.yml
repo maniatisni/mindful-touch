@@ -18,11 +18,11 @@ jobs:
         include:
           - platform: macos-latest
             os: macos
-            args: '--target universal-apple-darwin'
-            rust-target: x86_64-apple-darwin
+            args: ''
+            rust-target: aarch64-apple-darwin
             upload-files: |
-              frontend/src-tauri/target/universal-apple-darwin/release/bundle/macos/*.app
-              frontend/src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
+              frontend/src-tauri/target/aarch64-apple-darwin/release/bundle/macos/*.app
+              frontend/src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg
 
           #          - platform: ubuntu-22.04
 #            os: linux
@@ -80,17 +80,9 @@ jobs:
         run: |
           uv run pyinstaller backend_standalone.spec --clean --noconfirm
           mkdir -p frontend/src-tauri/bin
-          # For universal-apple-darwin builds, create both architectures
-          if [ "${{ matrix.os }}" = "macos" ]; then
-            cp dist/mindful-touch-backend "frontend/src-tauri/bin/mindful-touch-backend-x86_64-apple-darwin"
-            cp dist/mindful-touch-backend "frontend/src-tauri/bin/mindful-touch-backend-aarch64-apple-darwin"
-            chmod +x "frontend/src-tauri/bin/mindful-touch-backend-x86_64-apple-darwin"
-            chmod +x "frontend/src-tauri/bin/mindful-touch-backend-aarch64-apple-darwin"
-          else
-            TARGET=$(rustc -Vv | grep host | cut -d' ' -f2)
-            cp dist/mindful-touch-backend "frontend/src-tauri/bin/mindful-touch-backend-${TARGET}"
-            chmod +x "frontend/src-tauri/bin/mindful-touch-backend-${TARGET}"
-          fi
+          TARGET=$(rustc -Vv | grep host | cut -d' ' -f2)
+          cp dist/mindful-touch-backend "frontend/src-tauri/bin/mindful-touch-backend-${TARGET}"
+          chmod +x "frontend/src-tauri/bin/mindful-touch-backend-${TARGET}"
 
       - name: Build Python backend and stage as sidecar (Windows)
         if: matrix.os == 'windows'
@@ -122,6 +114,19 @@ jobs:
       - name: Build Tauri app
         working-directory: frontend/src-tauri
         run: cargo tauri build ${{ matrix.args }}
+
+      # ---------- Add camera permissions to macOS app ----------
+      - name: Add camera permissions (macOS)
+        if: matrix.os == 'macos'
+        working-directory: frontend/src-tauri
+        run: |
+          APP_PATH="target/*/release/bundle/macos/Mindful Touch.app"
+          if [ -d $APP_PATH ]; then
+            plutil -insert NSCameraUsageDescription -string "Mindful Touch uses the camera to detect hand movements and provide gentle awareness notifications when hands approach facial regions." "$APP_PATH/Contents/Info.plist"
+            echo "Added camera permission to Info.plist"
+          else
+            echo "Warning: App bundle not found at expected path"
+          fi
 
       # ---------- List bundle files for debug ----------
       - name: List generated bundle files (Unix)

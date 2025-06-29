@@ -110,17 +110,55 @@ def get_best_camera_index():
 
 def initialize_camera(camera_index=None, width=1280, height=720):
     """Initialize camera with given or auto-detected index"""
+    import platform
+    import sys
+    
+    print(f"Initializing camera on {platform.system()} {platform.release()}")
+    print(f"OpenCV version: {cv2.__version__}")
+    print(f"Python executable: {sys.executable}")
+    
     if camera_index is None:
+        print("Auto-detecting cameras...")
         camera_index = get_best_camera_index()
         if camera_index is None:
+            print("No cameras found during auto-detection")
             return None
-
-    cap = cv2.VideoCapture(camera_index)
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
-
-    if not cap.isOpened():
-        print(f"Error: Could not open camera {camera_index}")
-        return None
-
-    return cap
+    
+    print(f"Attempting to open camera {camera_index}")
+    
+    # Try different camera backends for better compatibility
+    backends = [cv2.CAP_AVFOUNDATION, cv2.CAP_ANY]  # AVFoundation first on macOS
+    
+    for backend in backends:
+        try:
+            print(f"Trying camera {camera_index} with backend {backend}")
+            cap = cv2.VideoCapture(camera_index, backend)
+            
+            if cap.isOpened():
+                print(f"Camera {camera_index} opened successfully with backend {backend}")
+                
+                # Test frame read
+                ret, test_frame = cap.read()
+                if ret:
+                    print(f"Test frame read successful: {test_frame.shape}")
+                    
+                    # Set desired resolution
+                    cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+                    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+                    
+                    # Verify actual resolution
+                    actual_width = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
+                    actual_height = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
+                    print(f"Camera resolution set to: {int(actual_width)}x{int(actual_height)}")
+                    
+                    return cap
+                else:
+                    print(f"Could not read test frame from camera {camera_index}")
+                    cap.release()
+            else:
+                print(f"Could not open camera {camera_index} with backend {backend}")
+        except Exception as e:
+            print(f"Exception opening camera {camera_index} with backend {backend}: {e}")
+    
+    print(f"Failed to open camera {camera_index} with any backend")
+    return None
