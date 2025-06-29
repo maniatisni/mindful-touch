@@ -98,4 +98,4 @@ jobs:
         uses: wagoid/commitlint-github-action@v5
         if: github.event_name == 'pull_request'
         with:
-          fetch-depth: 1
+          commitDepth: 1
