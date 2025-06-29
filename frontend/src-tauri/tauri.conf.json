@@ -1,7 +1,7 @@
 {
   "productName": "Mindful Touch",
   "version": "0.1.0",
-  "identifier": "com.mindfultouch.app",
+  "identifier": "com.mindfultouch",
   "build": {
     "frontendDist": "../ui"
   },
@@ -31,6 +31,12 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
+    ],
+    "resources": [
+      "resources/*"
+    ],
+    "externalBin": [
+      "bin/mindful-touch-backend"
     ],
     "publisher": "Nikos Maniatis",
     "category": "Productivity",
