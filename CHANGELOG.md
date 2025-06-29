@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.1.0](https://github.com/maniatisni/mindful-touch/compare/v1.0.0...v1.1.0) (2025-06-27)
+
+
+### Features
+
+* add sounds notifications ([#13](https://github.com/maniatisni/mindful-touch/issues/13)) ([0391f31](https://github.com/maniatisni/mindful-touch/commit/0391f312d8bff6f2f67eb23473bdd7a7069130db))
+
+
+### Bug Fixes
+
+* sound in alerts stops working after time ([#14](https://github.com/maniatisni/mindful-touch/issues/14)) ([f378c5e](https://github.com/maniatisni/mindful-touch/commit/f378c5e75499b15929f86aa543d703a0ff6dd3b8))
+
 ## 1.0.0 (2025-06-22)
 
 
