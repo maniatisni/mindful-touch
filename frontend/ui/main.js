@@ -788,6 +788,7 @@ class MindfulTouchApp {
             source.buffer = this.soundBuffers[soundType];
             source.connect(this.audioContext.destination);
             source.start();
+            source.onended = () => source.disconnect();
             
         } catch (error) {
             console.error('Error playing sound:', error);

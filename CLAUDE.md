@@ -196,8 +196,7 @@ cargo tauri dev
 **🔄 NEXT SESSION PRIORITIES**:
 1. **Backend Startup Optimization**: Reduce cold start time (currently slow)
 2. **Windows Build Pipeline**: Add Windows support to GitHub Actions
-3. **Linux Build Pipeline**: Add Linux AppImage/Deb support
-4. **Performance Optimization**: Frame rate and resource usage improvements
+3. **Performance Optimization**: Frame rate and resource usage improvements
 
 ### 🔧 UPCOMING WINDOWS BUILD SUPPORT
 
