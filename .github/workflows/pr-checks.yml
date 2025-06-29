@@ -78,6 +78,15 @@ jobs:
             frontend/src-tauri/target/
           key: ${{ runner.os }}-cargo-${{ hashFiles('frontend/src-tauri/**/Cargo.lock') }}
       
+      - name: Create placeholder backend binary for Tauri check
+        working-directory: frontend/src-tauri
+        run: |
+          mkdir -p bin
+          TARGET=$(rustc -Vv | grep host | cut -d' ' -f2)
+          echo '#!/bin/bash' > "bin/mindful-touch-backend-${TARGET}"
+          echo 'echo "Placeholder backend for CI checks"' >> "bin/mindful-touch-backend-${TARGET}"
+          chmod +x "bin/mindful-touch-backend-${TARGET}"
+      
       - name: Check Rust code
         working-directory: frontend/src-tauri
         run: |
@@ -89,4 +98,4 @@ jobs:
         uses: wagoid/commitlint-github-action@v5
         if: github.event_name == 'pull_request'
         with:
-          fetch-depth: 1
+          commitDepth: 1

@@ -21,10 +21,10 @@ Mindful Touch helps you become more aware of unconscious face-touching habits by
 
 ## 📋 Requirements
 
-- Python 3.8 or newer
-- Rust and Cargo (for Tauri)
-- Webcam
-- Operating System: Windows, macOS, or Linux
+- **For releases**: Just download and install from [GitHub Releases](../../releases)
+- **For development**: Python 3.8+, Rust/Cargo, UV package manager
+- **Hardware**: Webcam (built-in or external)
+- **OS**: macOS (production ready), Windows (coming soon), Linux (manual build)
 
 ## 🔧 Installation
 
@@ -103,6 +103,27 @@ For development and testing, you can run the backend separately:
 cd frontend/src-tauri
 cargo tauri build
 ```
+
+### Installing Production Builds
+
+**Linux (AppImage/DEB):**
+- Download from [releases](../../releases)
+- AppImage: `chmod +x Mindful-Touch.AppImage && ./Mindful-Touch.AppImage`
+- DEB: `sudo dpkg -i mindful-touch_*.deb`
+
+**Windows (MSI/NSIS):**
+- Download from [releases](../../releases)
+- Run the installer (`.msi` or `.exe`)
+
+**macOS (DMG/APP):**
+- Download from [releases](../../releases)
+- Open the DMG and drag to Applications folder
+- **Important**: macOS will show a security warning for unsigned apps. To allow the app:
+  ```bash
+  xattr -c "/Applications/Mindful Touch.app"
+  ```
+- Or right-click the app → "Open" → "Open" to bypass the warning
+- Grant camera permission when prompted
 
 ### Running Tests
 ```bash

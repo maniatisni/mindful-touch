@@ -28,7 +28,7 @@ MANIFEST
 
 # PyInstaller
 *.manifest
-*.spec
+
 
 # Installer logs
 pip-log.txt
@@ -99,7 +99,6 @@ frontend/src-tauri/Cargo.lock
 build/
 dist/
 *.dmg
-*.spec
 test_app.sh
 check_pync.sh
 entitlements.plist

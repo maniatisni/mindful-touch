@@ -4,152 +4,101 @@ name: Build and Release for Tags
 on:
   push:
     tags:
-      - 'v*'  # Push events to matching v*, i.e. v1.0, v20.15.10
+      - 'v*'         # e.g. v1.0, v20.15.10
 
 permissions:
   contents: write
-  
+
 jobs:
-  # Build for Linux (AppImage)
-  build-linux:
-    runs-on: ubuntu-22.04
+  build-and-release:
+    runs-on: ${{ matrix.platform }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest
+            os: macos
+            args: ''
+            rust-target: aarch64-apple-darwin
+            upload-files: |
+              frontend/src-tauri/target/release/bundle/macos/*.app
+              frontend/src-tauri/target/release/bundle/dmg/*.dmg
+
+          #          - platform: ubuntu-22.04
+#            os: linux
+#            args: '--target x86_64-unknown-linux-gnu'
+#            rust-target: x86_64-unknown-linux-gnu
+#            upload-files: |
+#              frontend/src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/appimage/*.AppImage
+#              frontend/src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/deb/*.deb
+#
+#          - platform: windows-latest
+#            os: windows
+#            args: '--target x86_64-pc-windows-msvc'
+#            rust-target: x86_64-pc-windows-msvc
+#            upload-files: |
+#              frontend/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/*.msi
+#              frontend/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe
+
     steps:
-      - uses: actions/checkout@v4
-      
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
-      
+        with:
+          targets: ${{ matrix.rust-target }}${{ matrix.os == 'macos' && ',aarch64-apple-darwin' || '' }}
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '18'
-      
-      - name: Install system dependencies
+
+      - name: Install uv for Python backend
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+          cache-dependency-glob: 'uv.lock'
+
+      - name: Set up Python
+        run: uv python install 3.11
+
+      # ---------- Linux-only system deps ----------
+      - name: Install Linux system dependencies
+        if: matrix.os == 'linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libgtk-3-dev
-      
-      - name: Install uv for Python backend
-        uses: astral-sh/setup-uv@v4
-        with:
-          enable-cache: true
-          cache-dependency-glob: "uv.lock"
-      
-      - name: Set up Python
-        run: uv python install 3.11
-      
-      - name: Install Python dependencies
-        run: uv sync
-      
-      - name: Install Tauri CLI
-        run: cargo install tauri-cli
-      
-      - name: Cache Rust dependencies
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            frontend/src-tauri/target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('frontend/src-tauri/**/Cargo.lock') }}
-      
-      - name: Build Tauri app
-        working-directory: frontend/src-tauri
-        run: |
-          cargo tauri build
-      
-      - name: Upload Linux artifacts
-        uses: softprops/action-gh-release@v1
-        with:
-          files: |
-            frontend/src-tauri/target/release/bundle/appimage/*.AppImage
-            frontend/src-tauri/target/release/bundle/deb/*.deb
 
-  # Build for Windows
-  build-windows:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-      
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-      
-      - name: Install uv for Python backend
-        uses: astral-sh/setup-uv@v4
-        with:
-          enable-cache: true
-          cache-dependency-glob: "uv.lock"
-      
-      - name: Set up Python
-        run: uv python install 3.11
-      
+      # ---------- Common Python deps ----------
       - name: Install Python dependencies
         run: uv sync
-      
-      - name: Install Tauri CLI
-        run: cargo install tauri-cli
-      
-      - name: Cache Rust dependencies
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            frontend/src-tauri/target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('frontend/src-tauri/**/Cargo.lock') }}
-      
-      - name: Build Tauri app
-        working-directory: frontend/src-tauri
-        run: |
-          cargo tauri build
-      
-      - name: Upload Windows artifacts
-        uses: softprops/action-gh-release@v1
-        with:
-          files: |
-            frontend/src-tauri/target/release/bundle/msi/*.msi
-            frontend/src-tauri/target/release/bundle/nsis/*.exe
 
-  # Build for macOS
-  build-macos:
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-      
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-      
-      - name: Install uv for Python backend
-        uses: astral-sh/setup-uv@v4
-        with:
-          enable-cache: true
-          cache-dependency-glob: "uv.lock"
-      
-      - name: Set up Python
-        run: uv python install 3.11
-      
-      - name: Install Python dependencies
-        run: uv sync
-      
+      # ---------- Build backend & stage as sidecar ----------
+      - name: Build Python backend and stage as sidecar (Unix)
+        if: matrix.os != 'windows'
+        run: |
+          uv run pyinstaller backend_standalone.spec --clean --noconfirm
+          mkdir -p frontend/src-tauri/bin
+          TARGET=$(rustc -Vv | grep host | cut -d' ' -f2)
+          cp dist/mindful-touch-backend "frontend/src-tauri/bin/mindful-touch-backend-${TARGET}"
+          chmod +x "frontend/src-tauri/bin/mindful-touch-backend-${TARGET}"
+
+      - name: Build Python backend and stage as sidecar (Windows)
+        if: matrix.os == 'windows'
+        shell: pwsh
+        run: |
+          uv run pyinstaller backend_standalone.spec --clean --noconfirm
+          $TARGET = '${{ matrix.rust-target }}'
+          New-Item -ItemType Directory -Force -Path 'frontend/src-tauri/bin'
+          Copy-Item 'dist/mindful-touch-backend.exe' "frontend/src-tauri/bin/mindful-touch-backend-$TARGET.exe"
+
       - name: Install Tauri CLI
-        run: cargo install tauri-cli
-      
+        run: cargo install tauri-cli --locked
+
+      # ---------- Cache Rust deps ----------
       - name: Cache Rust dependencies
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/bin/
@@ -158,15 +107,55 @@ jobs:
             ~/.cargo/git/db/
             frontend/src-tauri/target/
           key: ${{ runner.os }}-cargo-${{ hashFiles('frontend/src-tauri/**/Cargo.lock') }}
-      
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      # ---------- Build app ----------
       - name: Build Tauri app
         working-directory: frontend/src-tauri
+        run: cargo tauri build ${{ matrix.args }}
+
+      # ---------- Add camera permissions to macOS app ----------
+      - name: Add camera permissions (macOS)
+        if: matrix.os == 'macos'
+        working-directory: frontend/src-tauri
         run: |
-          cargo tauri build
-      
-      - name: Upload macOS artifacts
-        uses: softprops/action-gh-release@v1
+          APP_PATH="target/*/release/bundle/macos/Mindful Touch.app"
+          if [ -d $APP_PATH ]; then
+            plutil -insert NSCameraUsageDescription -string "Mindful Touch uses the camera to detect hand movements and provide gentle awareness notifications when hands approach facial regions." "$APP_PATH/Contents/Info.plist"
+            echo "Added camera permission to Info.plist"
+          else
+            echo "Warning: App bundle not found at expected path"
+          fi
+
+      # ---------- List bundle files for debug ----------
+      - name: List generated bundle files (Unix)
+        if: matrix.os != 'windows'
+        working-directory: frontend/src-tauri
+        run: |
+          echo '=== target directory structure ==='
+          find target -type d | head -20
+          echo '=== bundle dirs ==='
+          find target -name bundle -type d 2>/dev/null || echo 'none'
+          echo '=== bundle contents ==='
+          find target -path '*/bundle/*' -name '*.app' -o -name '*.dmg' 2>/dev/null || echo 'none'
+          echo '=== all app and dmg files ==='
+          find target -name '*.app' -o -name '*.dmg' 2>/dev/null || echo 'none'
+
+      - name: List generated bundle files (Windows)
+        if: matrix.os == 'windows'
+        shell: pwsh
+        working-directory: frontend/src-tauri
+        run: |
+          Write-Output '=== bundle dirs ==='
+          Get-ChildItem -Path target -Recurse -Directory -Name bundle -ErrorAction SilentlyContinue
+          Write-Output '=== bundle contents ==='
+          Get-ChildItem -Path target -Recurse -File | Where-Object { $_.FullName -like '*bundle*' } | Select-Object FullName
+
+      # ---------- Upload release artifacts ----------
+      - name: Upload Release Artifacts
+        uses: softprops/action-gh-release@v2
         with:
-          files: |
-            frontend/src-tauri/target/release/bundle/macos/*.app
-            frontend/src-tauri/target/release/bundle/dmg/*.dmg
+          files: ${{ matrix.upload-files }}
+          draft: false
+          prerelease: false
