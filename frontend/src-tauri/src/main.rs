@@ -1,10 +1,10 @@
 // Mindful Touch - Tauri Desktop Application
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use tauri_plugin_shell::{process::CommandChild, ShellExt};
 use std::sync::Mutex;
 use std::time::Duration;
 use tauri::Manager;
+use tauri_plugin_shell::{process::CommandChild, ShellExt};
 
 // Global state to track the Python backend process
 static PYTHON_PROCESS: Mutex<Option<CommandChild>> = Mutex::new(None);
