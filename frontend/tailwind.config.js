@@ -11,6 +11,11 @@ module.exports = {
         '20': '20px',
       },
       colors: {
+        lavenderLight: '#eef1ff',
+        lavenderDark: '#e0e4ff',
+        primary: '#7b6dff',
+        primaryHover: '#9d8dff',
+        primaryDisabled: '#e8e5ff',
         glass: {
           50: 'rgba(255, 255, 255, 0.9)',
           100: 'rgba(255, 255, 255, 0.8)',

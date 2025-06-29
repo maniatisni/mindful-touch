@@ -20,7 +20,7 @@ async fn start_python_backend(app: tauri::AppHandle) -> Result<(), String> {
         .shell()
         .sidecar("mindful-touch-backend")
         .unwrap()
-        .args(["--headless"])
+        .args(["--headless", "--verbose"])
         .spawn()
         .map_err(|e| e.to_string())?;
     *PYTHON_PROCESS.lock().unwrap() = Some(child);
