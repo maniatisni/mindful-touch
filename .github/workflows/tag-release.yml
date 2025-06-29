@@ -80,16 +80,26 @@ jobs:
         run: |
           uv run pyinstaller backend_standalone.spec --clean --noconfirm
           mkdir -p frontend/src-tauri/bin
-          cp dist/mindful-touch-backend "frontend/src-tauri/bin/mindful-touch-backend"
-          chmod +x "frontend/src-tauri/bin/mindful-touch-backend"
+          # For universal-apple-darwin builds, create both architectures
+          if [ "${{ matrix.os }}" = "macos" ]; then
+            cp dist/mindful-touch-backend "frontend/src-tauri/bin/mindful-touch-backend-x86_64-apple-darwin"
+            cp dist/mindful-touch-backend "frontend/src-tauri/bin/mindful-touch-backend-aarch64-apple-darwin"
+            chmod +x "frontend/src-tauri/bin/mindful-touch-backend-x86_64-apple-darwin"
+            chmod +x "frontend/src-tauri/bin/mindful-touch-backend-aarch64-apple-darwin"
+          else
+            TARGET=$(rustc -Vv | grep host | cut -d' ' -f2)
+            cp dist/mindful-touch-backend "frontend/src-tauri/bin/mindful-touch-backend-${TARGET}"
+            chmod +x "frontend/src-tauri/bin/mindful-touch-backend-${TARGET}"
+          fi
 
       - name: Build Python backend and stage as sidecar (Windows)
         if: matrix.os == 'windows'
         shell: pwsh
         run: |
           uv run pyinstaller backend_standalone.spec --clean --noconfirm
+          $TARGET = '${{ matrix.rust-target }}'
           New-Item -ItemType Directory -Force -Path 'frontend/src-tauri/bin'
-          Copy-Item 'dist/mindful-touch-backend.exe' 'frontend/src-tauri/bin/mindful-touch-backend.exe'
+          Copy-Item 'dist/mindful-touch-backend.exe' "frontend/src-tauri/bin/mindful-touch-backend-$TARGET.exe"
 
       - name: Install Tauri CLI
         run: cargo install tauri-cli --locked
