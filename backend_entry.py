@@ -5,7 +5,6 @@ This file is used by PyInstaller to create a standalone executable
 """
 
 import sys
-import os
 from pathlib import Path
 
 # Add the project root to the Python path
@@ -15,4 +14,5 @@ sys.path.insert(0, str(project_root))
 # Import and run the main function
 if __name__ == "__main__":
     from backend.detection.main import main
+
     main()
