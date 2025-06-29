@@ -79,19 +79,17 @@ jobs:
         if: matrix.os != 'windows'
         run: |
           uv run pyinstaller backend_standalone.spec --clean --noconfirm
-          TARGET=$(rustc -Vv | grep host | cut -d' ' -f2)
           mkdir -p frontend/src-tauri/bin
-          mv dist/mindful-touch-backend "frontend/src-tauri/bin/mindful-touch-backend-${TARGET}"
-          chmod +x "frontend/src-tauri/bin/mindful-touch-backend-${TARGET}"
+          cp dist/mindful-touch-backend "frontend/src-tauri/bin/mindful-touch-backend"
+          chmod +x "frontend/src-tauri/bin/mindful-touch-backend"
 
       - name: Build Python backend and stage as sidecar (Windows)
         if: matrix.os == 'windows'
         shell: pwsh
         run: |
           uv run pyinstaller backend_standalone.spec --clean --noconfirm
-          $TARGET = '${{ matrix.rust-target }}'
           New-Item -ItemType Directory -Force -Path 'frontend/src-tauri/bin'
-          Move-Item 'dist/mindful-touch-backend.exe' "frontend/src-tauri/bin/mindful-touch-backend-$TARGET.exe"
+          Copy-Item 'dist/mindful-touch-backend.exe' 'frontend/src-tauri/bin/mindful-touch-backend.exe'
 
       - name: Install Tauri CLI
         run: cargo install tauri-cli --locked
