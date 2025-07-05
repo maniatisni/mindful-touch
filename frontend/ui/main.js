@@ -1,6 +1,8 @@
 // Mindful Touch - Frontend JavaScript
 // Check if Tauri is available (Tauri v2 format)
 let invoke;
+let isPermissionGranted, requestPermission, sendNotification;
+
 if (window.__TAURI__ && window.__TAURI__.core) {
     invoke = window.__TAURI__.core.invoke;
 } else if (window.__TAURI__ && window.__TAURI__.tauri) {
@@ -8,9 +10,42 @@ if (window.__TAURI__ && window.__TAURI__.core) {
 } else {
     // Fallback function for testing
     invoke = async (cmd, args) => {
+        console.log(`Mock invoke: ${cmd}`, args);
         return `Mock response for ${cmd}`;
     };
 }
+
+// Try to access notification functions from plugin
+if (window.__TAURI_PLUGIN_NOTIFICATION__) {
+    const plugin = window.__TAURI_PLUGIN_NOTIFICATION__;
+    isPermissionGranted = plugin.isPermissionGranted;
+    requestPermission = plugin.requestPermission;
+    sendNotification = plugin.sendNotification;
+    console.log('Notification plugin loaded from __TAURI_PLUGIN_NOTIFICATION__');
+} else if (window.__TAURI__ && window.__TAURI__.notification) {
+    const plugin = window.__TAURI__.notification;
+    isPermissionGranted = plugin.isPermissionGranted;
+    requestPermission = plugin.requestPermission;
+    sendNotification = plugin.sendNotification;
+    console.log('Notification plugin loaded from __TAURI__.notification');
+} else {
+    // Fallback functions
+    console.warn('Notification plugin not found, using fallback');
+    isPermissionGranted = async () => {
+        console.log('Mock: notification permission check');
+        return true;
+    };
+    requestPermission = async () => {
+        console.log('Mock: notification permission request');
+        return 'granted';
+    };
+    sendNotification = async (options) => {
+        console.log('Mock notification:', options);
+        alert(`Notification: ${options.title}\n${options.body}`);
+    };
+}
+
+console.log('Tauri setup complete:', { invoke: !!invoke, isPermissionGranted: !!isPermissionGranted, sendNotification: !!sendNotification });
 
 class MindfulTouchApp {
     constructor() {
@@ -22,19 +57,22 @@ class MindfulTouchApp {
             mindfulStops: 0 // Count when user stops touching before alert
         };
         
-        // Notification settings
+        // Notification settings - system notifications enabled by default
         this.notificationSettings = {
             enabled: true,
             soundEnabled: true,
             delaySeconds: 3,
-            selectedSound: 'chime'
+            selectedSound: 'default' // Use system default sound
         };
+        
+        // Notification permission state
+        this.notificationPermission = null;
         
         // Alert delay management
         this.alertDelayTimeouts = new Map(); // Track active delays by region
         this.activeAlerts = new Set(); // Track which regions are currently alerting
         
-        // Audio context for playing sounds
+        // Audio context for playing sounds (fallback only)
         this.audioContext = null;
         this.soundBuffers = {};
         
@@ -66,6 +104,7 @@ class MindfulTouchApp {
         // Wait a bit for Tauri to initialize
         setTimeout(async () => {
             await this.testTauriConnection();
+            await this.initializeNotifications();
         }, 500);
     }
 
@@ -321,6 +360,50 @@ class MindfulTouchApp {
         } catch (error) {
             // Tauri connection test failed - ignore for now
         }
+    }
+    
+    async initializeNotifications() {
+        try {
+            console.log('Initializing notifications...');
+            // Check if notification permission is granted
+            this.notificationPermission = await isPermissionGranted();
+            console.log('Notification permission status:', this.notificationPermission);
+            
+            // If not granted, we'll request permission when first needed
+            if (!this.notificationPermission) {
+                console.log('Notification permission not granted, will request on first use');
+            } else {
+                console.log('Notification permission already granted');
+            }
+        } catch (error) {
+            console.warn('Failed to check notification permission:', error);
+            this.notificationPermission = false;
+        }
+    }
+    
+    async ensureNotificationPermission() {
+        console.log('Current permission state:', this.notificationPermission);
+        
+        if (this.notificationPermission === null || this.notificationPermission === false) {
+            try {
+                console.log('Requesting notification permission...');
+                const permission = await requestPermission();
+                console.log('Permission response:', permission);
+                this.notificationPermission = permission === 'granted';
+                
+                if (!this.notificationPermission) {
+                    console.warn('Permission denied:', permission);
+                    this.showError(`Notification permission ${permission}. Please enable in System Settings > Notifications.`);
+                } else {
+                    console.log('Permission granted successfully');
+                }
+            } catch (error) {
+                console.error('Failed to request notification permission:', error);
+                this.notificationPermission = false;
+            }
+        }
+        console.log('Final permission state:', this.notificationPermission);
+        return this.notificationPermission;
     }
 
     setupEventListeners() {
@@ -678,6 +761,8 @@ class MindfulTouchApp {
             this.notificationSettings.soundEnabled = e.target.checked;
         });
         
+        // No system notifications toggle - always use system notifications
+        
         // Delay slider
         const delaySlider = document.getElementById('notification-delay');
         const delayValue = document.getElementById('delay-value');
@@ -694,19 +779,29 @@ class MindfulTouchApp {
                 soundSelectButtons.forEach(btn => btn.classList.remove('active'));
                 // Add active class to clicked button
                 e.target.classList.add('active');
-                // Update selected sound
-                this.notificationSettings.selectedSound = e.target.dataset.sound;
+                // Update selected sound - map to platform-specific system sounds
+                const soundType = e.target.dataset.sound;
+                this.notificationSettings.selectedSound = this.mapSoundToPlatform(soundType);
+                console.log('Selected sound:', this.notificationSettings.selectedSound);
             });
         });
         
-        // Test sound button
+        // Test sound button - always test system notification
         const testButton = document.getElementById('test-sound-btn');
-        testButton.addEventListener('click', () => {
-            this.playTestSound(this.notificationSettings.selectedSound);
+        testButton.addEventListener('click', async () => {
+            await this.sendTestSystemNotification();
         });
         
-        // Initialize audio context
-        this.initializeAudio();
+        // Audio context disabled - using system notifications by default
+        // this.initializeAudio();
+        
+        // Set initial sound based on platform
+        this.notificationSettings.selectedSound = this.mapSoundToPlatform('chime');
+        
+        // Update test button text for system notifications
+        if (testButton) {
+            testButton.textContent = '🔔 Test System Notification';
+        }
     }
     
     // Initialize audio context and create sound buffers
@@ -795,6 +890,62 @@ class MindfulTouchApp {
         }
     }
     
+    // Send test system notification
+    async sendTestSystemNotification() {
+        try {
+            console.log('Testing system notification...');
+            // Ensure we have permission
+            if (!await this.ensureNotificationPermission()) {
+                this.showError('Notification permission required for system notifications');
+                return;
+            }
+            
+            const platform = this.detectPlatform();
+            const platformName = platform === 'macos' ? 'macOS' : platform === 'windows' ? 'Windows' : 'Linux';
+            
+            console.log('Platform detected:', platform, 'Sound:', this.notificationSettings.selectedSound);
+            
+            // Test different sound formats sequentially
+            const soundTests = [
+                { name: 'Current Setting', sound: this.notificationSettings.selectedSound },
+                { name: 'Default', sound: 'default' },
+                { name: 'Null', sound: null },
+                { name: 'Sosumi', sound: 'Sosumi' },
+                { name: 'Basso', sound: 'Basso' },
+                { name: 'Tink', sound: 'Tink' },
+                { name: 'No Sound Property', sound: undefined }
+            ];
+            
+            for (let i = 0; i < soundTests.length; i++) {
+                const test = soundTests[i];
+                console.log(`Testing sound ${i + 1}/${soundTests.length}: ${test.name} (${test.sound})`);
+                
+                const notificationOptions = {
+                    title: `Test ${i + 1}/${soundTests.length}: ${test.name}`,
+                    body: `Sound: ${test.sound || 'undefined'}`,
+                };
+                
+                // Only add sound property if it's not undefined
+                if (test.sound !== undefined) {
+                    notificationOptions.sound = test.sound;
+                }
+                
+                await sendNotification(notificationOptions);
+                
+                // Wait 2 seconds between tests
+                if (i < soundTests.length - 1) {
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                }
+            }
+            
+            console.log('All test notifications sent successfully');
+            
+        } catch (error) {
+            console.error('Test notification failed:', error);
+            this.showError(`Failed to send test notification: ${error.message}`);
+        }
+    }
+    
     // Handle alert delays - start timers for new regions, maintain existing ones
     handleAlertDelays(alertRegions) {
         const delayMs = this.notificationSettings.delaySeconds * 1000;
@@ -861,21 +1012,16 @@ class MindfulTouchApp {
     }
     
     // Trigger the actual alert (after delay)
-    triggerAlert(alertRegions) {
+    async triggerAlert(alertRegions) {
         // Add to active alerts
         alertRegions.forEach(region => this.activeAlerts.add(region));
         
         // Count as actual detection (only when alert actually fires)
         this.statistics.totalDetections++;
         
-        // Show visual notification if enabled
+        // Always use system notifications if enabled
         if (this.notificationSettings.enabled) {
-            this.showNotification(alertRegions);
-        }
-        
-        // Play sound if enabled (independent of visual notifications)
-        if (this.notificationSettings.soundEnabled) {
-            this.playTestSound(this.notificationSettings.selectedSound);
+            await this.sendSystemNotification(alertRegions);
         }
         
         // Trigger visual flash in overlay
@@ -960,7 +1106,22 @@ class MindfulTouchApp {
     }
     
     // Show positive reinforcement notification
-    showPositiveNotification() {
+    async showPositiveNotification() {
+        // Always use system notifications
+        if (await this.ensureNotificationPermission()) {
+            try {
+                await sendNotification({
+                    title: 'Mindful Moment! ✅',
+                    body: 'Great awareness stopping yourself',
+                    sound: null // No sound for positive reinforcement
+                });
+                return;
+            } catch (error) {
+                console.warn('System notification failed, falling back to visual:', error);
+            }
+        }
+        
+        // Fallback to visual notification
         const notification = document.createElement('div');
         notification.className = 'touch-notification positive';
         notification.innerHTML = `
@@ -998,6 +1159,74 @@ class MindfulTouchApp {
                 }
             }, 300);
         }, 2500);
+    }
+    
+    // Map sound types to platform-specific system sounds
+    mapSoundToPlatform(soundType) {
+        // Detect platform (simplified detection)
+        const platform = this.detectPlatform();
+        
+        const soundMaps = {
+            'macos': {
+                'chime': 'Glass',  // Known to exist in /System/Library/Sounds/
+                'beep': 'Ping',    // Known to exist in /System/Library/Sounds/
+                'gentle': 'Purr'   // Known to exist in /System/Library/Sounds/
+            },
+            'windows': {
+                'chime': 'Notification.Default',
+                'beep': 'Notification.Reminder', 
+                'gentle': 'Notification.SMS'
+            },
+            'linux': {
+                'chime': 'message-new-instant',
+                'beep': 'complete',
+                'gentle': 'bell'
+            }
+        };
+        
+        const selectedSound = soundMaps[platform]?.[soundType] || 'default';
+        console.log(`Platform: ${platform}, Type: ${soundType}, Selected: ${selectedSound}`);
+        return selectedSound;
+    }
+    
+    // Simple platform detection
+    detectPlatform() {
+        // Try to detect via Tauri API first
+        if (window.__TAURI__?.os) {
+            return window.__TAURI__.os.platform();
+        }
+        
+        // Fallback to user agent detection
+        const userAgent = navigator.userAgent.toLowerCase();
+        if (userAgent.includes('mac')) return 'macos';
+        if (userAgent.includes('win')) return 'windows';
+        if (userAgent.includes('linux')) return 'linux';
+        
+        return 'unknown';
+    }
+    
+    // Send system notification for alerts
+    async sendSystemNotification(alertRegions) {
+        try {
+            // Ensure we have permission
+            if (!await this.ensureNotificationPermission()) {
+                console.warn('No notification permission, falling back to visual notification');
+                this.showNotification(alertRegions);
+                return;
+            }
+            
+            // Send system notification with platform-appropriate sound
+            await sendNotification({
+                title: 'Touch Detected! ⚠️',
+                body: `Region: ${alertRegions.join(', ')}`,
+                sound: this.notificationSettings.soundEnabled ? this.notificationSettings.selectedSound : null
+            });
+            
+        } catch (error) {
+            console.warn('System notification failed:', error);
+            // Fallback to visual notification
+            this.showNotification(alertRegions);
+        }
     }
 }
 
