@@ -225,7 +225,56 @@ cargo tauri dev
 
 ### 🎯 Immediate Next Tasks (After Build Issues Resolved)
 
-**PRIORITY 1: Privacy & Performance Optimization** ✅ **NEW USER REQUEST**
+**PRIORITY 1: 🚨 CRITICAL BUG - Camera Resource Leak** ⚠️ **ACTIVE ISSUE**
+- **Issue**: When the Tauri app is closed, the camera light remains on indicating the backend process didn't properly release camera resources
+- **Root Cause Analysis**: 
+  - Backend Python process (`backend/detection/main.py`) runs in headless mode with infinite loop (`while True:`)
+  - Only responds to KeyboardInterrupt, not SIGTERM/SIGINT signals from Tauri process termination
+  - Camera resource cleanup (`cap.release()`) only happens in `finally` block on KeyboardInterrupt
+  - Tauri process management (`frontend/src-tauri/src/main.rs`) sends SIGTERM/SIGKILL but backend doesn't listen for these signals
+- **Investigation Status**: 
+  - ✅ Identified the issue in backend signal handling
+  - ✅ Located camera cleanup code in `run_headless_mode()` function
+  - ⚠️ **ATTEMPTED FIX FAILED**: Added signal handlers and graceful shutdown but reverted for separate commit
+- **Required Fix**: 
+  - Add proper signal handling (SIGTERM/SIGINT) to backend Python process
+  - Implement graceful camera resource cleanup on process termination
+  - Improve Tauri process termination with timeout for graceful shutdown
+  - Test camera light turns off immediately when app closes
+- **Files to Modify**:
+  - `backend/detection/main.py` - Add signal handlers and graceful shutdown
+  - `frontend/src-tauri/src/main.rs` - Improve process termination timing
+
+**PRIORITY 2: 🐌 PERFORMANCE - Slow Backend Startup** ⚠️ **OPTIMIZATION NEEDED**
+- **Issue**: Backend startup is very slow, taking several seconds before detection is ready
+- **Current Behavior**: 
+  - Frontend shows "Starting..." then "Connecting..." for extended time
+  - User waits 3-5+ seconds before detection begins
+  - No visibility into what's causing the delay
+- **Investigation Needed**: 
+  - ⚠️ **ROOT CAUSE UNKNOWN**: Need to profile and time each startup component
+  - Add timing measurements to identify bottlenecks in startup sequence
+  - Profile MediaPipe initialization, camera setup, WebSocket server startup
+- **Startup Sequence to Profile**:
+  1. Python process launch (`invoke('start_python_backend')`)
+  2. MediaPipe model loading (`MultiRegionDetector()`)
+  3. Camera initialization (`initialize_camera()`)
+  4. WebSocket server startup (`DetectionWebSocketServer`)
+  5. First frame processing and detection ready
+- **Optimization Strategy**:
+  - Time each component separately to identify the bottleneck
+  - Consider lazy loading of MediaPipe models
+  - Optimize camera initialization with faster detection
+  - Pre-warm components or parallel initialization where possible
+  - Add startup progress indicators for better UX
+- **Files to Profile**:
+  - `backend/detection/main.py` - Main startup sequence
+  - `backend/detection/multi_region_detector.py` - MediaPipe initialization
+  - `backend/detection/camera_utils.py` - Camera setup
+  - `backend/server/websocket_server.py` - WebSocket startup
+  - `frontend/ui/main.js` - Frontend startup coordination
+
+**PRIORITY 3: Privacy & Performance Optimization** ✅ **NEW USER REQUEST**
 - Add option to run detection without showing live camera feed
 - Implement "Privacy Mode" toggle that hides video but keeps detection active
 - Video quality settings (High/Medium/Low/Off) for performance optimization
