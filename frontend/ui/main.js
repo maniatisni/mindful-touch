@@ -431,6 +431,26 @@ class MindfulTouchApp {
         }
     }
 
+    async waitForBackendAndConnect() {
+        // Wait for backend to start up (MediaPipe initialization takes ~3 seconds)
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        
+        // Try to connect to WebSocket with retries
+        const maxAttempts = 10;
+        for (let i = 0; i < maxAttempts; i++) {
+            try {
+                await this.connectWebSocketAsync();
+                return; // Success
+            } catch (error) {
+                console.log(`Connection attempt ${i + 1}/${maxAttempts} failed, retrying...`);
+                if (i < maxAttempts - 1) {
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                }
+            }
+        }
+        throw new Error('Failed to connect to backend after multiple attempts');
+    }
+
     setupEventListeners() {
         // Start Detection Button
         const startButton = document.getElementById('start-detection');
@@ -464,13 +484,18 @@ class MindfulTouchApp {
                 console.log('Starting Python backend...');
                 // Start Python backend
                 await invoke('start_python_backend');
-                console.log('Python backend started, waiting for server to be ready...');
+                console.log('Python backend started, waiting for ready signal...');
                 
-                // Give the backend a moment to start the WebSocket server
-                await new Promise(resolve => setTimeout(resolve, 2000));
+                // Wait for backend to initialize and connect to WebSocket
+                button.textContent = 'Connecting...';
+                await this.waitForBackendAndConnect();
                 
-                // Wait for backend to be ready with health check polling
-                await this.waitForBackendReady();
+                // Set detection as running
+                this.isDetectionRunning = true;
+                this.sessionStartTime = Date.now();
+                button.textContent = 'Stop Detection';
+                button.disabled = false;
+                this.updateCameraDisplay();
                 
             } catch (error) {
                 console.error('Failed to start detection:', error);
