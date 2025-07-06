@@ -1,1 +1,3 @@
-This is a placeholder file. The actual binary will be placed here by the CI/CD pipeline.
+  #!/bin/bash
+  DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+  exec "$DIR/mindful-touch-backend/mindful-touch-backend" "$@"
