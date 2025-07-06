@@ -7,7 +7,6 @@ import time
 from typing import Any, Dict, List, Tuple
 
 import cv2
-import mediapipe as mp
 import numpy as np
 
 from .config import Config
@@ -15,6 +14,9 @@ from .config import Config
 
 class MultiRegionDetector:
     def __init__(self):
+        # Lazy import MediaPipe to reduce cold start time
+        import mediapipe as mp
+        
         # Initialize MediaPipe
         self.mp_hands = mp.solutions.hands
         self.mp_face_mesh = mp.solutions.face_mesh

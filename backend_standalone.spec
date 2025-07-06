@@ -52,6 +52,7 @@ a = Analysis(
         'numpy',
         'websockets',
         'asyncio',
+        'appdirs',
         'backend.detection.multi_region_detector',
         'backend.server.websocket_server',
         'backend.detection.config',
@@ -75,16 +76,15 @@ pyz = PYZ(a.pure)
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.datas,
     [],
+    exclude_binaries=True,
     name='mindful-touch-backend',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
     upx_exclude=[],
-    runtime_tmpdir=None,
+    runtime_tmpdir=str(Path.home() / '.mindfultouch' / '_mei'),
     console=True,  # Keep console for debugging
     disable_windowed_traceback=False,
     argv_emulation=False,
@@ -92,4 +92,14 @@ exe = EXE(
     codesign_identity=None,
     entitlements_file=None,
     icon=None,
+)
+
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.datas,
+    strip=False,
+    upx=True,
+    upx_exclude=[],
+    name='mindful-touch-backend',
 )

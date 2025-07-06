@@ -470,8 +470,7 @@ class MindfulTouchApp {
                 await new Promise(resolve => setTimeout(resolve, 2000));
                 
                 // Wait for backend to be ready with health check polling
-                // Don't set detection running until backend is confirmed ready
-                console.log('Backend ready and connected!');
+                await this.waitForBackendReady();
                 
             } catch (error) {
                 console.error('Failed to start detection:', error);

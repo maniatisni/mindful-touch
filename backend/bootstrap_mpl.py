@@ -1,6 +1,6 @@
 """
-PyInstaller runtime hook for matplotlib fast startup
-Optimizes matplotlib font cache handling to eliminate 30+ second startup delays
+Bootstrap matplotlib environment for fast startup
+Used in development runs when PyInstaller runtime hook hasn't fired
 """
 import os
 import pathlib
@@ -12,16 +12,12 @@ def setup_matplotlib_cache():
         # Always use headless backend for performance
         os.environ.setdefault("MPLBACKEND", "Agg")
         
-        # Disable matplotlib font discovery and rebuilding
-        os.environ.setdefault("MPLCONFIGDIR", "/dev/null")  # Disable config dir
-        os.environ.setdefault("MATPLOTLIB_CACHE_DIR", "/dev/null")  # Disable cache
-        
-        # Try to use bundled cache first
+        # Try to use bundled cache first (PyInstaller)
         bundled_cache = pathlib.Path(sys._MEIPASS) / "mplcache" if hasattr(sys, '_MEIPASS') else None
         
         if bundled_cache and bundled_cache.exists():
             # Use the bundled pre-built cache
-            os.environ["MPLCONFIGDIR"] = str(bundled_cache)
+            os.environ.setdefault("MPLCONFIGDIR", str(bundled_cache))
             print(f"[FontCache] Using bundled cache: {bundled_cache}")
         else:
             # Fallback to persistent user cache
@@ -35,7 +31,7 @@ def setup_matplotlib_cache():
             mpl_cache_dir = cache_base / "matplotlib"
             mpl_cache_dir.mkdir(parents=True, exist_ok=True)
             
-            os.environ["MPLCONFIGDIR"] = str(mpl_cache_dir)
+            os.environ.setdefault("MPLCONFIGDIR", str(mpl_cache_dir))
             print(f"[FontCache] Using user cache: {mpl_cache_dir}")
         
     except Exception as e:
@@ -43,5 +39,5 @@ def setup_matplotlib_cache():
         # Fallback to headless mode only
         os.environ.setdefault("MPLBACKEND", "Agg")
 
-# Execute setup immediately when hook runs
+# Execute setup immediately when module is imported
 setup_matplotlib_cache()
