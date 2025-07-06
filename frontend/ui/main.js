@@ -1,4 +1,7 @@
-// Mindful Touch - Frontend JavaScript
+// Mindful Touch - Frontend JavaScript with MediaPipe Detection
+import { MindfulTouchDetector } from './detection.js';
+import { CameraManager } from './camera.js';
+
 // Check if Tauri is available (Tauri v2 format)
 let invoke;
 if (window.__TAURI__ && window.__TAURI__.core) {
@@ -38,20 +41,14 @@ class MindfulTouchApp {
         this.audioContext = null;
         this.soundBuffers = {};
         
-        // WebSocket connection
-        this.websocket = null;
-        this.wsUrl = 'ws://localhost:8765';
-        this.reconnectAttempts = 0;
-        this.maxReconnectAttempts = 5;
+        // Detection system components
+        this.detector = new MindfulTouchDetector();
+        this.cameraManager = new CameraManager();
+        this.isInitialized = false;
         
-        // Heartbeat
-        this.heartbeatInterval = null;
-        this.heartbeatTimeout = null;
-        this.heartbeatFailures = 0;
-        
-        // Frame throttling disabled for real-time
-        this.lastFrameUpdate = 0;
-        this.frameThrottleMs = 0; // No throttling for real-time display
+        // Frame processing
+        this.lastFrameTime = 0;
+        this.frameCount = 0;
         
         this.init();
     }
@@ -63,255 +60,122 @@ class MindfulTouchApp {
         // Initialize UI
         this.updateUI();
         
+        // Initialize detection system
+        await this.initializeDetectionSystem();
+        
         // Wait a bit for Tauri to initialize
         setTimeout(async () => {
             await this.testTauriConnection();
         }, 500);
     }
 
-    connectWebSocket() {
-        // Close any existing connection
-        if (this.websocket) {
-            try {
-                if (this.websocket.readyState === WebSocket.OPEN || 
-                    this.websocket.readyState === WebSocket.CONNECTING) {
-                    this.websocket.close();
-                }
-            } catch (e) {
-                // Ignore close errors
-            }
-            this.websocket = null;
-        }
-        
+    async initializeDetectionSystem() {
         try {
-            this.websocket = new WebSocket(this.wsUrl);
+            console.log('Initializing detection system...');
             
-            // Set a timeout for initial connection
-            const connectionTimeout = setTimeout(() => {
-                if (this.websocket && this.websocket.readyState !== WebSocket.OPEN) {
-                    this.websocket.close();
-                    this.showError('Connection timeout. Please try again.');
-                }
-            }, 5000);
+            // Initialize MediaPipe detector only (not camera yet)
+            const detectorReady = await this.detector.initialize();
+            if (!detectorReady) {
+                throw new Error('Failed to initialize MediaPipe detector');
+            }
             
-            this.websocket.onopen = () => {
-                clearTimeout(connectionTimeout);
-                this.reconnectAttempts = 0;
-                this.updateConnectionStatus(true);
-                
-                // Start heartbeat
-                this.startHeartbeat();
-                
-                // Send ping to test connection
-                this.sendWebSocketMessage({ type: 'ping' });
-                
-                // Update button text if still showing connecting
-                const button = document.getElementById('start-detection');
-                if (button && button.textContent === 'Connecting...') {
-                    button.textContent = 'Stop Detection';
-                    button.disabled = false;
-                }
-            };
+            // Set initial alert delay
+            this.detector.updateAlertDelay(this.notificationSettings.delaySeconds);
             
-            this.websocket.onmessage = (event) => {
-                // Reset failure counter on any message
-                this.heartbeatFailures = 0;
-                this.handleWebSocketMessage(event.data);
-            };
-            
-            this.websocket.onclose = (event) => {
-                clearTimeout(connectionTimeout);
-                this.updateConnectionStatus(false);
-                
-                // Only attempt reconnect if detection is running
-                if (this.isDetectionRunning) {
-                    this.attemptReconnect();
-                }
-                
-                // Stop heartbeat
-                this.stopHeartbeat();
-            };
-            
-            this.websocket.onerror = (error) => {
-                clearTimeout(connectionTimeout);
-                this.updateConnectionStatus(false);
-                
-                // Show user-friendly error if initial connection fails
-                if (this.reconnectAttempts === 0) {
-                    this.showError('Could not connect to detection service.');
-                    
-                    // Reset UI state on connection error
-                    const button = document.getElementById('start-detection');
-                    if (button && this.isDetectionRunning) {
-                        button.textContent = 'Start Detection';
-                        button.disabled = false;
-                        this.isDetectionRunning = false;
-                        this.sessionStartTime = null;
-                        this.resetCameraDisplay();
-                    }
-                }
-            };
+            this.isInitialized = true;
+            this.updateConnectionStatus(true);
+            console.log('Detection system initialized successfully!');
             
         } catch (error) {
+            console.error('Failed to initialize detection system:', error);
+            this.showError(`Detection system initialization failed: ${error.message}`);
             this.updateConnectionStatus(false);
-            this.showError('Failed to create WebSocket connection');
-        }
-    }
-    
-    // Heartbeat to keep connection alive
-    startHeartbeat() {
-        this.stopHeartbeat(); // Clear any existing interval
-        this.heartbeatFailures = 0;
-        
-        // Send ping every 10 seconds
-        this.heartbeatInterval = setInterval(() => {
-            if (this.websocket && this.websocket.readyState === WebSocket.OPEN) {
-                this.sendWebSocketMessage({ type: 'ping' });
-                
-                // Check for response within 5 seconds
-                this.heartbeatTimeout = setTimeout(() => {
-                    this.heartbeatFailures++;
-                    
-                    // If we miss 3 heartbeats, reconnect
-                    if (this.heartbeatFailures >= 3) {
-                        if (this.websocket) {
-                            this.websocket.close();
-                        }
-                    }
-                }, 5000);
-            }
-        }, 10000);
-    }
-    
-    stopHeartbeat() {
-        if (this.heartbeatInterval) {
-            clearInterval(this.heartbeatInterval);
-            this.heartbeatInterval = null;
-        }
-        
-        if (this.heartbeatTimeout) {
-            clearTimeout(this.heartbeatTimeout);
-            this.heartbeatTimeout = null;
         }
     }
 
-    sendWebSocketMessage(message) {
-        if (this.websocket && this.websocket.readyState === WebSocket.OPEN) {
-            this.websocket.send(JSON.stringify(message));
+    async startDetection() {
+        if (!this.isInitialized) {
+            this.showError('Detection system not initialized. Please wait and try again.');
+            return;
         }
-    }
 
-    handleWebSocketMessage(data) {
-        // Reset heartbeat failure counter on any message from server
-        if (this.heartbeatTimeout) {
-            clearTimeout(this.heartbeatTimeout);
-            this.heartbeatTimeout = null;
-        }
-        this.heartbeatFailures = 0;
-        
         try {
-            const message = JSON.parse(data);
-            
-            switch (message.type) {
-                case 'detection_data':
-                    this.onDetectionData(message.data);
-                    // Handle camera frame if present
-                    if (message.data.frame) {
-                        this.displayCameraFrame(message.data.frame);
-                    }
-                    break;
-                    
-                case 'region_toggle_response':
-                    break;
-                    
-                case 'pong':
-                    break;
-                    
-                default:
-                    break;
+            // Initialize camera now (when user clicks start)
+            console.log('Initializing camera...');
+            const cameraReady = await this.cameraManager.initialize();
+            if (!cameraReady) {
+                throw new Error('Failed to initialize camera');
             }
+            
+            this.isDetectionRunning = true;
+            this.sessionStartTime = Date.now();
+            
+            // Update UI first to show camera feed
+            this.updateCameraDisplay();
+            
+            // Start frame processing
+            this.cameraManager.startCapture((video, timestamp) => {
+                this.processFrame(video, timestamp);
+            });
+            
+            console.log('Detection started');
+            
         } catch (error) {
-            // Ignore message parsing errors
+            console.error('Failed to start detection:', error);
+            this.showError(`Failed to start detection: ${error.message}`);
+            this.isDetectionRunning = false;
         }
     }
 
-    async waitForBackendReady() {
-        const maxAttempts = 30; // 30 seconds max wait
-        let attempts = 0;
-        
-        const checkBackend = async () => {
-            attempts++;
-            
-            try {
-                // Try to connect to WebSocket to test if backend is ready
-                const testSocket = new WebSocket(this.wsUrl);
-                
-                return new Promise((resolve, reject) => {
-                    const timeout = setTimeout(() => {
-                        testSocket.close();
-                        reject(new Error('Connection timeout'));
-                    }, 2000);
-                    
-                    testSocket.onopen = () => {
-                        clearTimeout(timeout);
-                        testSocket.close();
-                        resolve(true);
-                    };
-                    
-                    testSocket.onerror = () => {
-                        clearTimeout(timeout);
-                        reject(new Error('Connection failed'));
-                    };
-                });
-            } catch (error) {
-                throw error;
-            }
-        };
-        
-        // Update button text to show progress
-        const button = document.getElementById('start-detection');
-        
-        while (attempts < maxAttempts) {
-            try {
-                button.textContent = 'Starting...';
-                await checkBackend();
-                
-                // Backend is ready, connect WebSocket
-                button.textContent = 'Connecting...';
-                this.connectWebSocket();
-                
-                // Set detection as running only after backend is confirmed ready
-                this.isDetectionRunning = true;
-                this.sessionStartTime = Date.now();
-                button.textContent = 'Stop Detection';
-                button.disabled = false;
-                
-                // Update camera display only after backend is ready
-                this.updateCameraDisplay();
-                return;
-                
-            } catch (error) {
-                // Wait 1 second before next attempt
-                await new Promise(resolve => setTimeout(resolve, 1000));
-            }
-        }
-        
-        // Failed to connect after max attempts
-        button.textContent = 'Start Detection';
-        button.disabled = false;
+    stopDetection() {
         this.isDetectionRunning = false;
-        this.showError('Backend failed to start. Please try again.');
+        this.sessionStartTime = null;
+        
+        // Stop camera processing and destroy camera
+        if (this.cameraManager) {
+            this.cameraManager.stopCapture();
+            this.cameraManager.destroy(); // This stops the camera light
+        }
+        
+        // Clear all active alerts and timeouts
+        this.alertDelayTimeouts.forEach(timeout => clearTimeout(timeout));
+        this.alertDelayTimeouts.clear();
+        this.activeAlerts.clear();
+        
+        // Reset camera display
+        this.resetCameraDisplay();
+        
+        console.log('Detection stopped');
     }
 
-    attemptReconnect() {
-        if (this.reconnectAttempts < this.maxReconnectAttempts) {
-            this.reconnectAttempts++;
+    processFrame(video, timestamp) {
+        if (!this.isDetectionRunning || !this.detector.isInitialized) {
+            return;
+        }
+
+        try {
+            // Update frame count for debugging
+            this.frameCount++;
+            const frameCountElement = document.getElementById('frame-count');
+            if (frameCountElement && this.frameCount % 30 === 0) { // Update every 30 frames
+                frameCountElement.textContent = this.frameCount;
+            }
             
-            setTimeout(() => {
-                this.connectWebSocket();
-            }, 2000 * this.reconnectAttempts); // Exponential backoff
-        } else {
-            this.showError('Lost connection to detection service');
+            // Perform detection on current frame
+            const detectionResult = this.detector.detectFromVideo(video, timestamp);
+            
+            if (detectionResult) {
+                // Debug detection results
+                if (this.frameCount % 60 === 0) { // Log every 60 frames (about once per second)
+                    console.log('Detection result:', detectionResult);
+                }
+                this.onDetectionData(detectionResult);
+            }
+            
+            this.lastFrameTime = timestamp;
+            
+        } catch (error) {
+            console.error('Frame processing error:', error);
         }
     }
 
@@ -328,10 +192,15 @@ class MindfulTouchApp {
         const startButton = document.getElementById('start-detection');
         startButton.addEventListener('click', () => this.toggleDetection());
 
-        // Region Toggle Switches
+        // Region Toggle Switches - initialize to match default detector state
         const regions = ['scalp', 'eyebrows', 'eyes', 'mouth', 'beard'];
         regions.forEach(region => {
             const toggle = document.getElementById(`${region}-toggle`);
+            
+            // Set initial state to match detector default (only scalp active)
+            const isActiveByDefault = this.detector.activeRegions.includes(region);
+            toggle.checked = isActiveByDefault;
+            
             toggle.addEventListener('change', (e) => this.toggleRegion(region, e.target.checked));
         });
         
@@ -347,56 +216,55 @@ class MindfulTouchApp {
         
         if (!this.isDetectionRunning) {
             try {
-                button.textContent = 'Starting...';
-                button.disabled = true;
+                if (button) {
+                    button.textContent = 'Starting...';
+                    button.disabled = true;
+                }
                 
-                // Start Python backend
-                await invoke('start_python_backend');
+                // Start detection
+                await this.startDetection();
                 
-                // Wait for backend to be ready with health check polling
-                // Don't set detection running until backend is confirmed ready
-                await this.waitForBackendReady();
+                if (button) {
+                    button.textContent = 'Stop Detection';
+                    button.disabled = false;
+                }
                 
             } catch (error) {
-                button.textContent = 'Start Detection';
-                button.disabled = false;
+                if (button) {
+                    button.textContent = 'Start Detection';
+                    button.disabled = false;
+                }
                 this.showError(`Failed to start detection: ${error.message || error}`);
             }
         } else {
-            this.isDetectionRunning = false;
-            this.sessionStartTime = null;
-            button.textContent = 'Start Detection';
-            
-            // Stop heartbeat
-            this.stopHeartbeat();
-            
-            // Close WebSocket connection
-            if (this.websocket) {
-                this.websocket.close();
-                this.websocket = null;
+            this.stopDetection();
+            if (button) {
+                button.textContent = 'Start Detection';
+                button.disabled = false;
             }
-            
-            // Stop Python backend
-            try {
-                await invoke('stop_python_backend');
-            } catch (error) {
-                // Ignore stop errors
-            }
-            
-            // Reset camera display
-            this.resetCameraDisplay();
         }
     }
 
     async toggleRegion(region, enabled) {
         try {
-            // Send via WebSocket if connected
-            if (this.websocket && this.websocket.readyState === WebSocket.OPEN) {
-                this.sendWebSocketMessage({
-                    type: 'toggle_region',
-                    region: region,
-                    enabled: enabled
-                });
+            // Update the detector's active regions
+            if (this.detector) {
+                this.detector.toggleRegion(region, enabled);
+                console.log(`Region ${region} ${enabled ? 'enabled' : 'disabled'}. Active regions:`, this.detector.activeRegions);
+                
+                // If no regions are active and detection is running, show warning
+                if (this.detector.activeRegions.length === 0 && this.isDetectionRunning) {
+                    console.warn('No regions active - detection disabled until at least one region is enabled');
+                }
+                
+                // Clear any active alerts for this region when disabled
+                if (!enabled) {
+                    if (this.alertDelayTimeouts.has(region)) {
+                        clearTimeout(this.alertDelayTimeouts.get(region));
+                        this.alertDelayTimeouts.delete(region);
+                    }
+                    this.activeAlerts.delete(region);
+                }
             }
             
             // Update UI to reflect change immediately
@@ -407,7 +275,7 @@ class MindfulTouchApp {
             }
             
         } catch (error) {
-            // Ignore toggle errors
+            console.error('Error toggling region:', error);
         }
     }
 
@@ -426,11 +294,44 @@ class MindfulTouchApp {
         const placeholder = document.getElementById('camera-placeholder');
         const cameraFeed = document.getElementById('camera-feed');
         
+        console.log('Updating camera display...');
+        console.log('Camera manager video:', this.cameraManager.video);
+        
         // Hide placeholder and show camera feed
         placeholder.style.display = 'none';
         cameraFeed.style.display = 'block';
         
-        // Add detection status overlay with fixed dimensions
+        // Clear any existing content
+        cameraFeed.innerHTML = '';
+        
+        // Add the camera video element to the DOM
+        if (this.cameraManager.video) {
+            const video = this.cameraManager.video;
+            video.id = 'camera-video';
+            video.style.cssText = `
+                width: 100%;
+                height: 100%;
+                object-fit: cover;
+                border-radius: 12px;
+                background: black;
+            `;
+            
+            console.log('Adding video element to DOM:', video);
+            console.log('Video dimensions:', video.videoWidth, 'x', video.videoHeight);
+            console.log('Video ready state:', video.readyState);
+            console.log('Video src object:', video.srcObject);
+            
+            cameraFeed.appendChild(video);
+            
+            // Force video to play if it's not playing
+            if (video.paused) {
+                video.play().catch(console.error);
+            }
+        } else {
+            console.error('No video element available from camera manager');
+        }
+        
+        // Add detection status overlay
         const overlay = document.createElement('div');
         overlay.id = 'detection-overlay';
         overlay.style.cssText = `
@@ -458,10 +359,14 @@ class MindfulTouchApp {
                     <span class="status-label">Face:</span>
                     <span class="status-value" id="face-status">Detecting...</span>
                 </div>
+                <div class="status-item">
+                    <span class="status-label">Frames:</span>
+                    <span class="status-value" id="frame-count">0</span>
+                </div>
             </div>
         `;
         
-        // Create stop button with fixed width to prevent size changes
+        // Create stop button
         const stopButton = document.createElement('button');
         stopButton.id = 'stop-detection-btn';
         stopButton.className = 'primary-button';
@@ -475,78 +380,45 @@ class MindfulTouchApp {
             border-radius: 6px;
             cursor: pointer;
             font-size: 12px;
-            width: 110px;
-            text-align: center;
+            width: 100%;
+            box-sizing: border-box;
         `;
         
-        // Add event listener before appending
         stopButton.addEventListener('click', () => {
-            console.log('Stop button clicked');
             this.toggleDetection();
         });
         
         overlay.appendChild(stopButton);
+        cameraFeed.appendChild(overlay);
         
-        const cameraContainer = document.querySelector('.camera-container');
-        cameraContainer.style.position = 'relative';
-        cameraContainer.appendChild(overlay);
+        // Ensure camera feed container has relative positioning
+        cameraFeed.style.position = 'relative';
+        
+        console.log('Camera display updated');
     }
 
     resetCameraDisplay() {
         const placeholder = document.getElementById('camera-placeholder');
         const cameraFeed = document.getElementById('camera-feed');
-        const overlay = document.getElementById('detection-overlay');
         
         // Show placeholder and hide camera feed
         placeholder.style.display = 'block';
         cameraFeed.style.display = 'none';
         
-        // Remove overlay if it exists
-        if (overlay) {
-            overlay.remove();
-        }
+        // Clear camera feed content
+        cameraFeed.innerHTML = '';
         
+        // Reset placeholder content
         placeholder.innerHTML = `
             <div class="camera-icon">📹</div>
             <p>Camera feed will appear here</p>
             <button id="start-detection" class="primary-button" style="width: 140px; text-align: center;">Start Detection</button>
         `;
         
-        // Re-attach event listener
+        // Re-attach event listener to the new button
         const button = document.getElementById('start-detection');
-        button.addEventListener('click', () => this.toggleDetection());
-    }
-
-    displayCameraFrame(frameBase64) {
-        const cameraFeed = document.getElementById('camera-feed');
-        if (cameraFeed && this.isDetectionRunning) {
-            // Use more efficient image loading with object URL
-            try {
-                // Convert base64 to blob for better performance
-                const byteCharacters = atob(frameBase64);
-                const byteNumbers = new Array(byteCharacters.length);
-                for (let i = 0; i < byteCharacters.length; i++) {
-                    byteNumbers[i] = byteCharacters.charCodeAt(i);
-                }
-                const byteArray = new Uint8Array(byteNumbers);
-                
-                // Auto-detect image type (PNG or JPEG) based on header
-                const isPNG = byteArray[0] === 0x89 && byteArray[1] === 0x50 && byteArray[2] === 0x4E && byteArray[3] === 0x47;
-                const mimeType = isPNG ? 'image/png' : 'image/jpeg';
-                const blob = new Blob([byteArray], { type: mimeType });
-                
-                // Revoke previous object URL to prevent memory leaks
-                if (cameraFeed.src && cameraFeed.src.startsWith('blob:')) {
-                    URL.revokeObjectURL(cameraFeed.src);
-                }
-                
-                // Set new object URL
-                cameraFeed.src = URL.createObjectURL(blob);
-            } catch (error) {
-                console.warn('Failed to update camera frame:', error);
-                // Fallback to base64
-                cameraFeed.src = `data:image/jpeg;base64,${frameBase64}`;
-            }
+        if (button) {
+            button.addEventListener('click', () => this.toggleDetection());
         }
     }
 
@@ -642,20 +514,22 @@ class MindfulTouchApp {
         contactInfo.className = 'contact-info';
         contactInfo.style.cssText = 'margin-top: 8px; font-size: 11px;';
         
-        const contactCount = data.contact_points || 0;
         const alertsActive = data.alerts_active || [];
+        const contactsActive = data.contacts_active || [];
         
-        contactInfo.innerHTML = `
-            <div style="color: ${contactCount > 0 ? '#ef4444' : '#10b981'};">
-                Contacts: ${contactCount}
-            </div>
-            ${alertsActive.length > 0 ? 
-                `<div style="color: #ef4444; font-weight: bold;">
-                    ⚠️ Alert: ${alertsActive.join(', ')}
-                </div>` : 
-                '<div style="color: #10b981;">No alerts</div>'
-            }
-        `;
+        // Show which regions have contact vs which are alerting
+        const statusLines = [];
+        if (contactsActive.length > 0) {
+            statusLines.push(`<div style="color: #f59e0b;">Contact: ${contactsActive.join(', ')}</div>`);
+        }
+        if (alertsActive.length > 0) {
+            statusLines.push(`<div style="color: #ef4444; font-weight: bold;">⚠️ Alert: ${alertsActive.join(', ')}</div>`);
+        }
+        if (contactsActive.length === 0 && alertsActive.length === 0) {
+            statusLines.push('<div style="color: #10b981;">No contact detected</div>');
+        }
+        
+        contactInfo.innerHTML = statusLines.join('');
         
         if (!overlay.querySelector('.contact-info')) {
             overlay.appendChild(contactInfo);
@@ -684,6 +558,11 @@ class MindfulTouchApp {
         delaySlider.addEventListener('input', (e) => {
             this.notificationSettings.delaySeconds = parseInt(e.target.value);
             delayValue.textContent = `${e.target.value}s`;
+            
+            // Update detector with new alert delay
+            if (this.detector) {
+                this.detector.updateAlertDelay(this.notificationSettings.delaySeconds);
+            }
         });
         
         // Sound selection buttons
@@ -797,28 +676,29 @@ class MindfulTouchApp {
     
     // Handle alert delays - start timers for new regions, maintain existing ones
     handleAlertDelays(alertRegions) {
-        const delayMs = this.notificationSettings.delaySeconds * 1000;
+        // Use alert delay as the minimum contact duration (overrides region-specific timing)
+        const alertDelayMs = this.notificationSettings.delaySeconds * 1000;
         
         alertRegions.forEach(region => {
             // If this region is not already in delay or alerting, start delay timer
             if (!this.alertDelayTimeouts.has(region) && !this.activeAlerts.has(region)) {
                 
-                if (delayMs === 0) {
+                if (alertDelayMs === 0) {
                     // No delay - trigger immediately
                     this.triggerAlert([region]);
                 } else {
-                    // Start delay timer
+                    // Start delay timer - contact must persist for the full alert delay duration
                     const timeoutId = setTimeout(() => {
                         this.alertDelayTimeouts.delete(region);
                         this.triggerAlert([region]);
-                    }, delayMs);
+                    }, alertDelayMs);
                     
                     this.alertDelayTimeouts.set(region, timeoutId);
                 }
             }
         });
         
-        // Cancel delays for regions that are no longer active
+        // Cancel delays for regions that are no longer active (contact broken)
         for (const [region, timeoutId] of this.alertDelayTimeouts.entries()) {
             if (!alertRegions.includes(region)) {
                 clearTimeout(timeoutId);
@@ -878,7 +758,7 @@ class MindfulTouchApp {
             this.playTestSound(this.notificationSettings.selectedSound);
         }
         
-        // Trigger visual flash in overlay
+        // Always trigger visual flash in overlay (for debugging/feedback)
         this.triggerOverlayFlash();
     }
     
