@@ -6,6 +6,7 @@ Gentle awareness tool for mindful hand movement tracking
 import argparse
 import base64
 import queue
+import signal
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -103,7 +104,9 @@ def run_headless_mode(cap, detector, verbose=False):
 
     for attempt in range(max_port_attempts):
         try:
-            logger.info(f"Attempting to start WebSocket server on port {port} (attempt {attempt + 1}/{max_port_attempts})")
+            logger.info(
+                f"Attempting to start WebSocket server on port {port} (attempt {attempt + 1}/{max_port_attempts})"
+            )
             ws_server = DetectionWebSocketServer(port=port)
             ws_server.run_in_thread()
             logger.info(f"WebSocket server started on port {port}")
@@ -122,6 +125,15 @@ def run_headless_mode(cap, detector, verbose=False):
 
     # Create thread pool for frame processing (increased for high quality)
     executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="frame_processor")
+
+    # Signal handler to gracefully shutdown threads
+    def signal_handler(signum, frame):
+        logger.info(f"Received signal {signum}, initiating shutdown...")
+        shutdown_event.set()
+
+    # Register signal handlers
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
 
     def camera_capture_thread():
         """Dedicated thread for camera capture"""
@@ -192,7 +204,9 @@ def run_headless_mode(cap, detector, verbose=False):
                     # Send every 2nd frame for good performance
                     if frame_count % 2 == 0:
                         try:
-                            frame_base64 = future_encoding.result(timeout=0.1)  # Shorter timeout for better responsiveness
+                            frame_base64 = future_encoding.result(
+                                timeout=0.1
+                            )  # Shorter timeout for better responsiveness
                             detection_output["frame"] = frame_base64
                         except Exception:
                             pass  # Skip frame if encoding takes too long
@@ -200,7 +214,9 @@ def run_headless_mode(cap, detector, verbose=False):
                     ws_server.update_detection_data(detection_output)
 
                 if verbose and frame_count % 60 == 0:
-                    logger.debug(f"Frame {frame_count}: {len(ws_server.clients)} clients, {detection_data.get('contact_points', 0)} contacts")
+                    logger.debug(
+                        f"Frame {frame_count}: {len(ws_server.clients)} clients, {detection_data.get('contact_points', 0)} contacts"
+                    )
 
             except queue.Empty:
                 continue

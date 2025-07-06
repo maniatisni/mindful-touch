@@ -157,6 +157,75 @@ class MindfulTouchApp {
             this.showError('Failed to create WebSocket connection');
         }
     }
+
+    // New async version of connectWebSocket that waits for connection
+    async connectWebSocketAsync() {
+        return new Promise((resolve, reject) => {
+            // Close any existing connection
+            if (this.websocket) {
+                try {
+                    if (this.websocket.readyState === WebSocket.OPEN || 
+                        this.websocket.readyState === WebSocket.CONNECTING) {
+                        this.websocket.close();
+                    }
+                } catch (e) {
+                    // Ignore close errors
+                }
+                this.websocket = null;
+            }
+            
+            try {
+                this.websocket = new WebSocket(this.wsUrl);
+                
+                const connectionTimeout = setTimeout(() => {
+                    if (this.websocket && this.websocket.readyState !== WebSocket.OPEN) {
+                        this.websocket.close();
+                        reject(new Error('Connection timeout'));
+                    }
+                }, 5000);
+                
+                this.websocket.onopen = () => {
+                    clearTimeout(connectionTimeout);
+                    this.reconnectAttempts = 0;
+                    this.updateConnectionStatus(true);
+                    
+                    // Start heartbeat
+                    this.startHeartbeat();
+                    
+                    // Send ping to test connection
+                    this.sendWebSocketMessage({ type: 'ping' });
+                    
+                    resolve(); // ✅ Resolve when actually connected
+                };
+                
+                this.websocket.onmessage = (event) => {
+                    this.heartbeatFailures = 0;
+                    this.handleWebSocketMessage(event.data);
+                };
+                
+                this.websocket.onclose = (event) => {
+                    clearTimeout(connectionTimeout);
+                    this.updateConnectionStatus(false);
+                    
+                    if (this.isDetectionRunning) {
+                        this.attemptReconnect();
+                    }
+                    
+                    this.stopHeartbeat();
+                };
+                
+                this.websocket.onerror = (error) => {
+                    clearTimeout(connectionTimeout);
+                    this.updateConnectionStatus(false);
+                    reject(new Error('WebSocket connection failed'));
+                };
+                
+            } catch (error) {
+                this.updateConnectionStatus(false);
+                reject(new Error('Failed to create WebSocket connection'));
+            }
+        });
+    }
     
     // Heartbeat to keep connection alive
     startHeartbeat() {
@@ -236,11 +305,24 @@ class MindfulTouchApp {
     }
 
     async waitForBackendReady() {
-        const maxAttempts = 30; // 30 seconds max wait
+        const maxAttempts = 3;
         let attempts = 0;
         
         const checkBackend = async () => {
-            attempts++;
+            console.log(`Attempting WebSocket connection to ${this.wsUrl}...`);
+            
+            // First, let's try a simple fetch to see if anything is responding on the port
+            try {
+                console.log('Testing if port 8765 is responding...');
+                const response = await fetch('http://localhost:8765', { 
+                    method: 'GET',
+                    mode: 'no-cors',
+                    signal: AbortSignal.timeout(1000)
+                });
+                console.log('Port 8765 responded to HTTP request');
+            } catch (error) {
+                console.log('Port 8765 HTTP test failed (this might be normal for WebSocket-only servers):', error.message);
+            }
             
             try {
                 // Try to connect to WebSocket to test if backend is ready
@@ -248,22 +330,44 @@ class MindfulTouchApp {
                 
                 return new Promise((resolve, reject) => {
                     const timeout = setTimeout(() => {
+                        console.log('WebSocket test connection timeout');
                         testSocket.close();
                         reject(new Error('Connection timeout'));
                     }, 2000);
                     
+                    let resolved = false;
+                    
                     testSocket.onopen = () => {
-                        clearTimeout(timeout);
-                        testSocket.close();
-                        resolve(true);
+                        console.log('WebSocket test connection opened successfully');
+                        if (!resolved) {
+                            resolved = true;
+                            clearTimeout(timeout);
+                            testSocket.close();
+                            resolve(true);
+                        }
                     };
                     
-                    testSocket.onerror = () => {
-                        clearTimeout(timeout);
-                        reject(new Error('Connection failed'));
+                    testSocket.onerror = (error) => {
+                        console.error('WebSocket test connection error:', error);
+                        if (!resolved) {
+                            resolved = true;
+                            clearTimeout(timeout);
+                            reject(new Error('Connection failed'));
+                        }
+                    };
+                    
+                    testSocket.onclose = (event) => {
+                        console.log('WebSocket test connection closed:', event.code, event.reason);
+                        // Don't reject on close if we already resolved successfully
+                        if (!resolved) {
+                            resolved = true;
+                            clearTimeout(timeout);
+                            reject(new Error('Connection closed'));
+                        }
                     };
                 });
             } catch (error) {
+                console.error('WebSocket test connection creation failed:', error);
                 throw error;
             }
         };
@@ -272,15 +376,19 @@ class MindfulTouchApp {
         const button = document.getElementById('start-detection');
         
         while (attempts < maxAttempts) {
+            attempts++;
             try {
-                button.textContent = 'Starting...';
+                button.textContent = `Starting... (${attempts}/${maxAttempts})`;
+                console.log(`Backend readiness check attempt ${attempts}...`);
                 await checkBackend();
                 
-                // Backend is ready, connect WebSocket
+                // Backend is ready, now connect and WAIT for WebSocket
                 button.textContent = 'Connecting...';
-                this.connectWebSocket();
+                console.log('Backend ready, connecting WebSocket...');
+                await this.connectWebSocketAsync(); // Wait for connection
                 
-                // Set detection as running only after backend is confirmed ready
+                // Only set these AFTER successful WebSocket connection
+                console.log('WebSocket connected successfully!');
                 this.isDetectionRunning = true;
                 this.sessionStartTime = Date.now();
                 button.textContent = 'Stop Detection';
@@ -291,7 +399,7 @@ class MindfulTouchApp {
                 return;
                 
             } catch (error) {
-                // Wait 1 second before next attempt
+                console.error(`Connection attempt ${attempts} failed:`, error);
                 await new Promise(resolve => setTimeout(resolve, 1000));
             }
         }
@@ -346,18 +454,27 @@ class MindfulTouchApp {
         const button = document.getElementById('start-detection');
         
         if (!this.isDetectionRunning) {
+            // Allow retries - always enable button reset
+            button.disabled = false;
+            
             try {
                 button.textContent = 'Starting...';
                 button.disabled = true;
                 
+                console.log('Starting Python backend...');
                 // Start Python backend
                 await invoke('start_python_backend');
+                console.log('Python backend started, waiting for server to be ready...');
+                
+                // Give the backend a moment to start the WebSocket server
+                await new Promise(resolve => setTimeout(resolve, 2000));
                 
                 // Wait for backend to be ready with health check polling
                 // Don't set detection running until backend is confirmed ready
-                await this.waitForBackendReady();
+                console.log('Backend ready and connected!');
                 
             } catch (error) {
+                console.error('Failed to start detection:', error);
                 button.textContent = 'Start Detection';
                 button.disabled = false;
                 this.showError(`Failed to start detection: ${error.message || error}`);

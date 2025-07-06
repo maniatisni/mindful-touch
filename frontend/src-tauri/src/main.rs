@@ -16,6 +16,12 @@ fn greet(name: &str) -> String {
 
 #[tauri::command]
 async fn start_python_backend(app: tauri::AppHandle) -> Result<(), String> {
+    // Always clean up any existing process first to allow retries
+    let _ = cleanup_python_process();
+    
+    // Small delay to ensure cleanup is complete
+    std::thread::sleep(std::time::Duration::from_millis(500));
+    
     let (_rx, child) = app
         .shell()
         .sidecar("mindful-touch-backend")
@@ -37,15 +43,23 @@ fn cleanup_python_process() -> Result<String, String> {
     if let Some(child) = process_guard.take() {
         // First try to terminate gracefully
         let pid = child.pid() as i32; // Get pid before child is moved by kill()
+        // First try graceful termination with SIGTERM
+        #[cfg(unix)]
+        unsafe {
+            libc::kill(pid, libc::SIGTERM);
+        }
+        
+        // Give the process time to shut down gracefully
+        std::thread::sleep(Duration::from_millis(2000));
+        
+        // If still running, force kill
         match child.kill() {
             Ok(_) => {
                 // On Unix systems, also kill the process group to ensure all child processes are terminated
                 #[cfg(unix)]
                 {
                     unsafe {
-                        // Kill the entire process group
-                        libc::killpg(pid, libc::SIGTERM);
-                        std::thread::sleep(Duration::from_millis(100));
+                        // Kill the entire process group as final cleanup
                         libc::killpg(pid, libc::SIGKILL);
                     }
                 }

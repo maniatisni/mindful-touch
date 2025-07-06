@@ -30,6 +30,14 @@ try:
 except ImportError:
     print("Warning: MediaPipe not found, proceeding without data files")
 
+# Include pre-built matplotlib cache
+mpl_cache_path = project_root / "build" / "mplcache"
+if mpl_cache_path.exists():
+    datas.append((str(mpl_cache_path), "mplcache"))
+    print(f"Including matplotlib cache: {mpl_cache_path}")
+else:
+    print("Warning: Pre-built matplotlib cache not found")
+
 a = Analysis(
     ['backend_entry.py'],
     pathex=[str(project_root)],
@@ -51,7 +59,7 @@ a = Analysis(
     ],
     hookspath=[],
     hooksconfig={},
-    runtime_hooks=[],
+    runtime_hooks=['hook_mpl_faststart.py'],
     excludes=[
         'tkinter',
         'pytest',
