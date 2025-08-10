@@ -4,7 +4,7 @@ Modular UI component for region toggles and alert controls
 """
 
 from PyQt6.QtCore import pyqtSignal
-from PyQt6.QtWidgets import QCheckBox, QGroupBox, QHBoxLayout, QLabel, QDoubleSpinBox, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QCheckBox, QDoubleSpinBox, QGroupBox, QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
 from backend.detection.config import Config
 

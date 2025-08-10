@@ -42,8 +42,8 @@ class MultiRegionDetector:
         self.region_states = {}
         for region in Config.AVAILABLE_REGIONS:
             self.region_states[region] = {
-                "contact_start_time": None, 
-                "alert_active": False, 
+                "contact_start_time": None,
+                "alert_active": False,
                 "last_alert_time": 0,
                 "alert_triggered": False
             }
@@ -85,8 +85,9 @@ class MultiRegionDetector:
         detection_data = {
             "hands_detected": len(hand_landmarks) > 0,
             "face_detected": face_landmarks is not None,
-            "contact_points": sum(len(contacts) for contacts in filtered_data.values()),
+            "contact_points": sum(len(data["contacts"]) for data in filtered_data.values()),
             "active_regions": list(filtered_data.keys()),
+            "regions_with_contact": [region for region, data in filtered_data.items() if len(data["contacts"]) > 0],
             "alerts_active": [region for region, data in filtered_data.items() if data.get("alert_active", False)],
         }
 
@@ -339,13 +340,12 @@ class MultiRegionDetector:
                 # Check if contact persisted long enough
                 duration = current_time - state["contact_start_time"]
                 if duration >= settings["min_detection_time"]:
-                    # Check if it's time for (another) alert
-                    time_since_last_alert = current_time - state["last_alert_time"]
-                    if time_since_last_alert >= settings["min_detection_time"]:
-                        state["alert_active"] = True
+                    # Alert is active for entire sustained contact duration
+                    if not state.get("alert_triggered", False):
+                        # First time triggering - play sound
+                        state["alert_triggered"] = True
                         state["last_alert_time"] = current_time
-                    else:
-                        state["alert_active"] = False
+                    state["alert_active"] = True
                 else:
                     state["alert_active"] = False
             else:
