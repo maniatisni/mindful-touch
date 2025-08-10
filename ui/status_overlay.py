@@ -32,11 +32,10 @@ class StatusOverlay(QWidget):
         layout.setContentsMargins(12, 10, 12, 10)
         layout.setSpacing(4)
 
-        self.hands_label = QLabel("Hands: --")
-        self.face_label = QLabel("Face: --")
+        # Separate lines within same box
+        self.detection_label = QLabel("👋❌")
         self.contacts_label = QLabel("Contacts: 0")
-        self.regions_label = QLabel("Regions: None")
-        self.alerts_label = QLabel("Status: Ready")
+        self.status_label = QLabel("Status: Ready")
 
         # Style labels for better readability
         label_style = """
@@ -47,41 +46,37 @@ class StatusOverlay(QWidget):
             }
         """
 
-        for label in [self.hands_label, self.face_label, self.contacts_label, self.regions_label, self.alerts_label]:
+        for label in [self.detection_label, self.contacts_label, self.status_label]:
             label.setStyleSheet(label_style)
             layout.addWidget(label)
 
     def update_status(self, data):
         """Update overlay with detection data and handle alerts"""
-        self.hands_label.setText(f"Hands: {'✓' if data.get('hands_detected') else '✗'}")
-        self.face_label.setText(f"Face: {'✓' if data.get('face_detected') else '✗'}")
-
+        # Update separate lines
+        hands_icon = "👋" if data.get('hands_detected') else "❌"
+        face_icon = "👤" if data.get('face_detected') else "❌"
         contacts = data.get("contact_points", 0)
-        self.contacts_label.setText(f"Contacts: {contacts}")
 
-        # Show hierarchical region status: proximity vs alerts
+        # Show hierarchical region status
         regions_with_contact = data.get("regions_with_contact", [])
         alerts = data.get("alerts_active", [])
 
         if alerts:
-            # Red alert state - show which regions are alerting
-            self.regions_label.setText(f"Regions: {', '.join(alerts)} (ALERT)")
-            self.regions_label.setStyleSheet("QLabel { color: #ff6b6b; font-weight: bold; }")
-            self.alerts_label.setText(f"ALERT: {', '.join(alerts)}")
-            self.alerts_label.setStyleSheet("QLabel { color: #ff6b6b; font-weight: bold; }")
+            status_text = f"{', '.join(alerts)} ALERT"
+            status_color = "#ff6b6b"
             self._play_alert_sound()
         elif regions_with_contact:
-            # Orange proximity state - show regions with contact
-            self.regions_label.setText(f"Regions: {', '.join(regions_with_contact)} (proximity)")
-            self.regions_label.setStyleSheet("QLabel { color: #FF9800; font-weight: 500; }")
-            self.alerts_label.setText("Status: Proximity")
-            self.alerts_label.setStyleSheet("QLabel { color: #FF9800; font-weight: 500; }")
+            status_text = f"{', '.join(regions_with_contact)} proximity"
+            status_color = "#FF9800"
         else:
-            # No contact
-            self.regions_label.setText("Regions: None")
-            self.regions_label.setStyleSheet("QLabel { color: #e0e0e0; font-weight: 500; }")
-            self.alerts_label.setText("Status: OK")
-            self.alerts_label.setStyleSheet("QLabel { color: #4CAF50; font-weight: 500; }")
+            status_text = "monitoring"
+            status_color = "#4CAF50"
+
+        # Update individual lines
+        self.detection_label.setText(f"{hands_icon} {face_icon}")
+        self.contacts_label.setText(f"Contacts: {contacts}")
+        self.status_label.setText(f"Status: {status_text}")
+        self.status_label.setStyleSheet(f"QLabel {{ color: {status_color}; font-weight: 500; padding: 2px 0; }}")
 
     def _play_alert_sound(self):
         """Play alert sound - spam prevention handled by contact duration"""

@@ -178,7 +178,8 @@ class MainWindow(QMainWindow):
         self.settings_panel.contact_duration_changed.connect(self.update_contact_duration)
 
     def update_camera(self, frame):
-        if self.show_feed:
+        # Only update camera if detection is running AND feed should be shown
+        if self.is_detecting and self.show_feed:
             height, width, channel = frame.shape
             bytes_per_line = 3 * width
             q_image = QImage(frame.data, width, height, bytes_per_line, QImage.Format.Format_RGB888).rgbSwapped()
@@ -245,6 +246,7 @@ class MainWindow(QMainWindow):
             self.privacy_button.setEnabled(False)
             self.privacy_button.setText("Hide Feed")
             self.show_feed = True  # Reset to show feed
+            # Show initial screen
             self.camera_label.clear()
             self.camera_label.setText("Camera will appear here\nClick Start to begin")
 

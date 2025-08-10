@@ -87,8 +87,8 @@ class SettingsPanel(QWidget):
         delay_layout.addWidget(duration_label)
 
         self.duration_spinbox = QDoubleSpinBox()
-        self.duration_spinbox.setRange(0.5, 3.0)
-        self.duration_spinbox.setSingleStep(0.1)
+        self.duration_spinbox.setRange(0.5, 10.0)
+        self.duration_spinbox.setSingleStep(0.5)
         self.duration_spinbox.setDecimals(1)
         self.duration_spinbox.setValue(self.contact_duration)
         self.duration_spinbox.valueChanged.connect(lambda v: self.contact_duration_changed.emit(float(v)))
