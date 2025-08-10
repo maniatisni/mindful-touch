@@ -1,0 +1,1 @@
+"""Custom PyQt6 widgets for Mindful Touch application."""

@@ -1,0 +1,1 @@
+"""PyQt6 GUI package for Mindful Touch application."""
