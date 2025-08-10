@@ -53,8 +53,8 @@ class StatusOverlay(QWidget):
     def update_status(self, data):
         """Update overlay with detection data and handle alerts"""
         # Update separate lines
-        hands_icon = "👋" if data.get('hands_detected') else "❌"
-        face_icon = "👤" if data.get('face_detected') else "❌"
+        hands_icon = "👋" if data.get("hands_detected") else "❌"
+        face_icon = "👤" if data.get("face_detected") else "❌"
         contacts = data.get("contact_points", 0)
 
         # Show hierarchical region status

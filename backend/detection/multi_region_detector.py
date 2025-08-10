@@ -41,12 +41,7 @@ class MultiRegionDetector:
         # Detection state for each region
         self.region_states = {}
         for region in Config.AVAILABLE_REGIONS:
-            self.region_states[region] = {
-                "contact_start_time": None,
-                "alert_active": False,
-                "last_alert_time": 0,
-                "alert_triggered": False
-            }
+            self.region_states[region] = {"contact_start_time": None, "alert_active": False, "last_alert_time": 0, "alert_triggered": False}
 
         # Fingertip indices
         self.FINGERTIPS = [4, 8, 12, 16, 20]
