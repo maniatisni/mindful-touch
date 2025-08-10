@@ -41,7 +41,12 @@ class MultiRegionDetector:
         # Detection state for each region
         self.region_states = {}
         for region in Config.AVAILABLE_REGIONS:
-            self.region_states[region] = {"contact_start_time": None, "alert_active": False, "last_alert_time": 0}
+            self.region_states[region] = {
+                "contact_start_time": None, 
+                "alert_active": False, 
+                "last_alert_time": 0,
+                "alert_triggered": False
+            }
 
         # Fingertip indices
         self.FINGERTIPS = [4, 8, 12, 16, 20]
@@ -329,17 +334,25 @@ class MultiRegionDetector:
             if has_contact:
                 if state["contact_start_time"] is None:
                     state["contact_start_time"] = current_time
+                    state["last_alert_time"] = 0  # Reset alert timer
 
                 # Check if contact persisted long enough
                 duration = current_time - state["contact_start_time"]
                 if duration >= settings["min_detection_time"]:
-                    state["alert_active"] = True
+                    # Check if it's time for (another) alert
+                    time_since_last_alert = current_time - state["last_alert_time"]
+                    if time_since_last_alert >= settings["min_detection_time"]:
+                        state["alert_active"] = True
+                        state["last_alert_time"] = current_time
+                    else:
+                        state["alert_active"] = False
                 else:
                     state["alert_active"] = False
             else:
                 # Reset contact tracking
                 state["contact_start_time"] = None
                 state["alert_active"] = False
+                state["alert_triggered"] = False
 
             filtered_data[region] = {
                 "contacts": contacts,
