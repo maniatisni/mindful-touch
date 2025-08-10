@@ -403,14 +403,6 @@ class MultiRegionDetector:
             if data["alert_active"]:
                 alert_regions.append(region)
 
-        # Draw alert border if any region has alert
-        if alert_regions:
-            h, w = frame.shape[:2]
-            cv2.rectangle(frame, (0, 0), (w - 1, h - 1), Config.CONTACT_COLOR, 5)
-
-            alert_text = f"CONTACT: {', '.join(alert_regions).upper()}"
-            cv2.putText(frame, alert_text, (20, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, Config.CONTACT_COLOR, 2)
-
     def toggle_region(self, region: str):
         """Toggle region on/off"""
         if region in Config.AVAILABLE_REGIONS:
