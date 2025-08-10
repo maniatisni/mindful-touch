@@ -32,11 +32,7 @@ dependencies = [
     "numpy>=1.21.0",
     "ruff>=0.1.0",
     "pytest>=8.0",
-    "pyinstaller>=6.0.0",
-    "matplotlib>=3.7.5",
-    "pillow>=10.4.0",
     "PyQt6>=6.6.0",
-    "QtPy>=2.4.1",
 ]
 
 [project.optional-dependencies]
@@ -64,7 +60,7 @@ linux = [
 ]
 
 [project.scripts]
-mindful-touch = "backend.detection.main:main"
+mindful-touch = "main:main"
 
 [project.urls]
 Homepage = "https://github.com/maniatisni/mindful-touch"

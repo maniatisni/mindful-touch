@@ -1,1 +1,0 @@
-"""Audio system for Mindful Touch application."""

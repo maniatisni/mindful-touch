@@ -1,1 +1,0 @@
-"""QSS stylesheets for Mindful Touch application."""
