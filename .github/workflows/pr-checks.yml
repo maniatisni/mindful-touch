@@ -37,18 +37,40 @@ jobs:
       - name: Run ruff format check
         run: uv run ruff format --check .
       
-      - name: Run Python tests
-        run: uv run pytest -v
+      - name: Check if tests exist and run them
+        run: |
+          if find . -name "test_*.py" -o -name "*_test.py" | grep -q .; then
+            echo "Found tests, running pytest..."
+            uv run pytest -v
+          else
+            echo "No tests found, skipping pytest"
+          fi
         env:
           # Use mock camera for CI
           PYTEST_MOCK_CAMERA: "1"
           # Use virtual display for Qt tests
           QT_QPA_PLATFORM: "offscreen"
       
-      - name: Test PyQt6 app startup (headless mode)
+      - name: Test PyQt6 imports and basic functionality
         run: |
-          timeout 10s uv run python main.py --test-mode || true
-          echo "PyQt6 app startup test completed"
+          echo "Testing PyQt6 and MediaPipe imports..."
+          uv run python -c "
+          import sys
+          try:
+              import PyQt6.QtWidgets
+              import cv2
+              import mediapipe as mp
+              import numpy as np
+              from backend.detection.config import Config
+              from backend.detection.multi_region_detector import MultiRegionDetector
+              from ui.status_overlay import StatusOverlay
+              from ui.settings_panel import SettingsPanel
+              print('✅ All imports successful')
+              print('✅ PyQt6 app components can be imported')
+          except Exception as e:
+              print(f'❌ Import failed: {e}')
+              sys.exit(1)
+          "
       
       - name: Validate conventional commits
         uses: wagoid/commitlint-github-action@v5
