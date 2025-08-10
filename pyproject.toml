@@ -33,6 +33,7 @@ dependencies = [
     "ruff>=0.1.0",
     "pytest>=8.0",
     "PyQt6>=6.6.0",
+    "pyinstaller>=6.15.0",
 ]
 
 [project.optional-dependencies]
