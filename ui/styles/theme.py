@@ -1,33 +1,51 @@
 """
-Glass-like transparent theme for Mindful Touch
-Modern, minimal design with generous spacing
+Professional color system for Mindful Touch
+Based on UX designer specifications with accessibility compliance
 """
 
 
 class Theme:
-    # Colors - Glass theme with transparency
-    BACKGROUND = "qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 rgba(240, 248, 255, 0.15), stop:1 rgba(220, 240, 255, 0.2))"
+    # Core color tokens (light theme) - warmer tones
+    PRIMARY_600 = "#2F6BA9"
+    PRIMARY_500 = "#3B7CBE"
+    PRIMARY_100 = "#F0F4F8"
+    SUCCESS_600 = "#2E8857"
+    WARNING_500 = "#F2A63A"
+    ERROR_600 = "#C9483B"
 
-    # Card colors - Glass effect
-    CARD_BACKGROUND = "rgba(255, 255, 255, 0.12)"
-    CARD_BORDER = "rgba(255, 255, 255, 0.2)"
-    CARD_SHADOW = "rgba(0, 0, 0, 0.05)"
+    # Neutral palette - warmer grays
+    NEUTRAL_900 = "#1A1818"  # Text primary - warmer black
+    NEUTRAL_700 = "#3B3F4A"  # Text secondary/icons - warmer gray
+    NEUTRAL_500 = "#8A8E9E"  # Borders - warmer gray
+    NEUTRAL_300 = "#C8CDD8"  # Dividers - warmer gray
+    NEUTRAL_100 = "#EEEEEE"  # Cards - much more subtle
+    CANVAS = "#F2F2F2"  # Window background - much less bright
+    WHITE = "#FFFFFF"
 
-    # Text colors
-    TEXT_PRIMARY = "#1A202C"  # Very dark gray (better contrast)
-    TEXT_SECONDARY = "#4A5568"  # Dark gray
-    TEXT_LIGHT = "#FFFFFF"  # White for dark backgrounds
-    TEXT_MUTED = "#718096"  # Medium gray
+    # Focus and interaction
+    FOCUS_RING = "rgba(77, 154, 240, 0.4)"
 
-    # Accent colors
-    ACCENT_BLUE = "#3498DB"  # Primary blue
-    ACCENT_GREEN = "#2ECC71"  # Success green
-    ACCENT_ORANGE = "#FF9800"  # Warning orange
-    ACCENT_RED = "#E74C3C"  # Alert red
+    # Legacy compatibility - map old names to new system
+    BACKGROUND = f"qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 {CANVAS}, stop:1 {PRIMARY_100})"
+    CARD_BACKGROUND = NEUTRAL_100
+    CARD_BORDER = NEUTRAL_300
+    CARD_SHADOW = "rgba(16, 20, 24, 0.08)"
 
-    # Toggle switch colors
-    TOGGLE_ACTIVE = "#4CAF50"  # Active green
-    TOGGLE_INACTIVE = "#BDC3C7"  # Inactive gray
+    # Text colors (updated)
+    TEXT_PRIMARY = NEUTRAL_900
+    TEXT_SECONDARY = NEUTRAL_700
+    TEXT_LIGHT = WHITE
+    TEXT_MUTED = NEUTRAL_500
+
+    # Accent colors (updated)
+    ACCENT_BLUE = PRIMARY_600
+    ACCENT_GREEN = SUCCESS_600
+    ACCENT_ORANGE = WARNING_500
+    ACCENT_RED = ERROR_600
+
+    # Toggle switch colors (updated)
+    TOGGLE_ACTIVE = PRIMARY_500
+    TOGGLE_INACTIVE = NEUTRAL_300
     TOGGLE_BACKGROUND = "rgba(255, 255, 255, 0.2)"
 
     # Spacing constants
@@ -51,12 +69,13 @@ class Theme:
 
     @staticmethod
     def card_style():
-        """Standard card styling"""
+        """Standard card styling with elevation"""
         return f"""
             QWidget {{
                 background-color: {Theme.CARD_BACKGROUND};
-                border: none;
-                border-radius: {Theme.BORDER_RADIUS}px;
+                border: 1px solid {Theme.CARD_BORDER};
+                border-radius: 12px;
+                /* Note: QSS doesn't support box-shadow, handled by container */
             }}
         """
 
@@ -94,10 +113,10 @@ class Theme:
         """Primary button styling"""
         return f"""
             QPushButton {{
-                background-color: {Theme.ACCENT_BLUE};
-                color: {Theme.TEXT_LIGHT};
+                background-color: {Theme.PRIMARY_600};
+                color: {Theme.WHITE};
                 border: none;
-                border-radius: 12px;
+                border-radius: 8px;
                 font-family: {Theme.FONT_BODY};
                 font-size: {Theme.FONT_SIZE_BODY}px;
                 font-weight: 600;
@@ -105,25 +124,54 @@ class Theme:
                 min-height: 44px;
             }}
             QPushButton:hover {{
-                background-color: rgba(52, 152, 219, 0.9);
+                background-color: rgba(47, 110, 169, 0.9);
             }}
             QPushButton:pressed {{
-                background-color: rgba(52, 152, 219, 0.8);
+                background-color: rgba(47, 110, 169, 0.8);
+            }}
+        """
+
+    @staticmethod
+    def button_secondary_style():
+        """Secondary button styling"""
+        return f"""
+            QPushButton {{
+                background-color: transparent;
+                color: {Theme.PRIMARY_600};
+                border: 1px solid {Theme.NEUTRAL_500};
+                border-radius: 8px;
+                font-family: {Theme.FONT_BODY};
+                font-size: {Theme.FONT_SIZE_BODY}px;
+                font-weight: 600;
+                padding: 12px 24px;
+                min-height: 44px;
+            }}
+            QPushButton:hover {{
+                background-color: {Theme.PRIMARY_100};
+                border-color: {Theme.PRIMARY_600};
+            }}
+            QPushButton:pressed {{
+                background-color: rgba(232, 241, 250, 0.8);
+            }}
+            QPushButton:disabled {{
+                background-color: transparent;
+                color: {Theme.NEUTRAL_500};
+                border-color: {Theme.NEUTRAL_300};
             }}
         """
 
     @staticmethod
     def status_badge_style(status="ready"):
-        """Status badge styling"""
-        colors = {"ready": Theme.ACCENT_GREEN, "detecting": Theme.ACCENT_BLUE, "alert": Theme.ACCENT_RED}
-        color = colors.get(status, Theme.ACCENT_GREEN)
+        """Success chip styling - matches designer specs"""
+        colors = {"ready": Theme.SUCCESS_600, "detecting": Theme.PRIMARY_600, "alert": Theme.ERROR_600}
+        color = colors.get(status, Theme.SUCCESS_600)
 
         return f"""
             QLabel {{
                 background-color: {color};
-                color: {Theme.TEXT_LIGHT};
+                color: {Theme.WHITE};
                 border: none;
-                border-radius: 16px;
+                border-radius: 12px;
                 padding: 8px 16px;
                 font-family: {Theme.FONT_BODY};
                 font-size: {Theme.FONT_SIZE_SMALL}px;

@@ -90,7 +90,7 @@ class NotificationSettingsCard(QWidget):
                 font-family: {Theme.FONT_BODY};
                 font-size: {Theme.FONT_SIZE_BODY}px;
                 font-weight: 600;
-                color: {Theme.ACCENT_BLUE};
+                color: {Theme.PRIMARY_600};
                 border: none;
                 background: transparent;
             }}
@@ -106,29 +106,33 @@ class NotificationSettingsCard(QWidget):
         self.delay_slider.setOrientation(Qt.Orientation.Horizontal)
         self.delay_slider.setRange(5, 100)  # 0.5s to 10.0s (×10)
         self.delay_slider.setValue(10)  # 1.0s default
-        self.delay_slider.setTickPosition(QSlider.TickPosition.TicksBelow)
-        self.delay_slider.setTickInterval(25)  # Every 2.5s
+        # Remove tick marks completely
+        self.delay_slider.setTickPosition(QSlider.TickPosition.NoTicks)
 
         self.delay_slider.setStyleSheet(f"""
+            QSlider {{
+                border: none;
+                background: transparent;
+            }}
             QSlider::groove:horizontal {{
-                border: 1px solid {Theme.CARD_BORDER};
+                border: none;
                 height: 6px;
-                background: {Theme.TOGGLE_BACKGROUND};
+                background: {Theme.NEUTRAL_300};
                 border-radius: 3px;
             }}
             QSlider::handle:horizontal {{
-                background: {Theme.ACCENT_BLUE};
-                border: 2px solid {Theme.TEXT_LIGHT};
+                background: {Theme.PRIMARY_600};
+                border: none;
                 width: 20px;
                 height: 20px;
-                margin: -8px 0;
-                border-radius: 12px;
+                margin: -7px 0;
+                border-radius: 10px;
             }}
             QSlider::handle:horizontal:hover {{
-                background: rgba(52, 152, 219, 0.8);
+                background: rgba(47, 110, 169, 0.8);
             }}
             QSlider::sub-page:horizontal {{
-                background: {Theme.ACCENT_BLUE};
+                background: {Theme.PRIMARY_600};
                 border-radius: 3px;
             }}
         """)

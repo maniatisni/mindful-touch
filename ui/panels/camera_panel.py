@@ -33,13 +33,7 @@ class LiveDetectionCard(QWidget):
         title.setStyleSheet(Theme.section_title_style())
         layout.addWidget(title)
 
-        # Camera container
-        self.camera_container = QWidget()
-        self.camera_container.setMinimumSize(720, 540)  # 4:3 aspect ratio
-        container_layout = QVBoxLayout(self.camera_container)
-        container_layout.setContentsMargins(0, 0, 0, 0)
-
-        # Camera display
+        # Camera display - no container wrapper to avoid clipping
         self.camera_label = QLabel()
         self.camera_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.camera_label.setMinimumSize(720, 540)
@@ -51,13 +45,13 @@ class LiveDetectionCard(QWidget):
                 color: {Theme.TEXT_SECONDARY};
                 font-family: {Theme.FONT_BODY};
                 font-size: {Theme.FONT_SIZE_BODY}px;
+                margin-bottom: {Theme.ITEM_SPACING}px;
             }}
         """)
 
         # Default message
         self._set_default_message()
-        container_layout.addWidget(self.camera_label)
-        layout.addWidget(self.camera_container)
+        layout.addWidget(self.camera_label)
 
         # Controls
         controls_layout = QHBoxLayout()
@@ -68,29 +62,10 @@ class LiveDetectionCard(QWidget):
         self.detection_button.setStyleSheet(Theme.button_primary_style())
         self.detection_button.clicked.connect(self._on_detection_button_clicked)
 
-        # Privacy button
+        # Privacy button - secondary style
         self.privacy_button = QPushButton("Hide Feed")
         self.privacy_button.setEnabled(False)
-        self.privacy_button.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {Theme.ACCENT_ORANGE};
-                color: {Theme.TEXT_LIGHT};
-                border: none;
-                border-radius: 12px;
-                font-family: {Theme.FONT_BODY};
-                font-size: {Theme.FONT_SIZE_BODY}px;
-                font-weight: 600;
-                padding: 12px 24px;
-                min-height: 44px;
-            }}
-            QPushButton:hover {{
-                background-color: rgba(255, 152, 0, 0.9);
-            }}
-            QPushButton:disabled {{
-                background-color: {Theme.TEXT_MUTED};
-                color: rgba(255, 255, 255, 0.6);
-            }}
-        """)
+        self.privacy_button.setStyleSheet(Theme.button_secondary_style())
         self.privacy_button.clicked.connect(self._on_privacy_button_clicked)
 
         controls_layout.addWidget(self.detection_button)
@@ -121,10 +96,10 @@ class LiveDetectionCard(QWidget):
             self.detection_button.setText("Stop Detection")
             self.detection_button.setStyleSheet(f"""
                 QPushButton {{
-                    background-color: {Theme.ACCENT_RED};
-                    color: {Theme.TEXT_LIGHT};
+                    background-color: {Theme.ERROR_600};
+                    color: {Theme.WHITE};
                     border: none;
-                    border-radius: 12px;
+                    border-radius: 8px;
                     font-family: {Theme.FONT_BODY};
                     font-size: {Theme.FONT_SIZE_BODY}px;
                     font-weight: 600;
@@ -132,7 +107,7 @@ class LiveDetectionCard(QWidget):
                     min-height: 44px;
                 }}
                 QPushButton:hover {{
-                    background-color: rgba(231, 76, 60, 0.9);
+                    background-color: rgba(201, 72, 59, 0.9);
                 }}
             """)
             self.privacy_button.setEnabled(True)
@@ -150,40 +125,10 @@ class LiveDetectionCard(QWidget):
 
         if show_feed:
             self.privacy_button.setText("Hide Feed")
-            self.privacy_button.setStyleSheet(f"""
-                QPushButton {{
-                    background-color: {Theme.ACCENT_ORANGE};
-                    color: {Theme.TEXT_LIGHT};
-                    border: none;
-                    border-radius: 12px;
-                    font-family: {Theme.FONT_BODY};
-                    font-size: {Theme.FONT_SIZE_BODY}px;
-                    font-weight: 600;
-                    padding: 12px 24px;
-                    min-height: 44px;
-                }}
-                QPushButton:hover {{
-                    background-color: rgba(255, 152, 0, 0.9);
-                }}
-            """)
+            self.privacy_button.setStyleSheet(Theme.button_secondary_style())
         else:
             self.privacy_button.setText("Show Feed")
-            self.privacy_button.setStyleSheet(f"""
-                QPushButton {{
-                    background-color: {Theme.TEXT_SECONDARY};
-                    color: {Theme.TEXT_LIGHT};
-                    border: none;
-                    border-radius: 12px;
-                    font-family: {Theme.FONT_BODY};
-                    font-size: {Theme.FONT_SIZE_BODY}px;
-                    font-weight: 600;
-                    padding: 12px 24px;
-                    min-height: 44px;
-                }}
-                QPushButton:hover {{
-                    background-color: rgba(96, 125, 139, 0.9);
-                }}
-            """)
+            self.privacy_button.setStyleSheet(Theme.button_secondary_style())
             self.camera_label.setText("🔒 Privacy Mode Active\n\nDetection running in background\nClick 'Show Feed' to view camera")
 
     def update_camera_frame(self, pixmap):
@@ -193,12 +138,19 @@ class LiveDetectionCard(QWidget):
 
 
 class ActivityCard(QWidget):
-    """Card for session statistics"""
+    """Card for session statistics with subtle backdrop"""
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setup_ui()
-        self.setStyleSheet(Theme.card_style())
+        # Use PRIMARY_100 backdrop as suggested by designer
+        self.setStyleSheet(f"""
+            QWidget {{
+                background-color: {Theme.PRIMARY_100};
+                border: 1px solid {Theme.CARD_BORDER};
+                border-radius: 12px;
+            }}
+        """)
 
     def setup_ui(self):
         layout = QVBoxLayout(self)
@@ -215,15 +167,15 @@ class ActivityCard(QWidget):
         stats_layout.setSpacing(Theme.SECTION_SPACING)
 
         # Detections counter
-        self.detections_widget = self._create_stat_widget("0", "DETECTIONS", Theme.ACCENT_BLUE)
+        self.detections_widget = self._create_stat_widget("0", "DETECTIONS", Theme.PRIMARY_600)
         stats_layout.addWidget(self.detections_widget)
 
         # Session timer
-        self.session_widget = self._create_stat_widget("0m", "SESSION", Theme.ACCENT_BLUE)
+        self.session_widget = self._create_stat_widget("0m", "SESSION", Theme.PRIMARY_600)
         stats_layout.addWidget(self.session_widget)
 
         # Mindful stops (placeholder)
-        self.stops_widget = self._create_stat_widget("0", "MINDFUL STOPS", Theme.TEXT_MUTED)
+        self.stops_widget = self._create_stat_widget("0", "MINDFUL STOPS", Theme.PRIMARY_600)
         stats_layout.addWidget(self.stops_widget)
 
         layout.addLayout(stats_layout)
