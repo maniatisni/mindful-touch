@@ -46,7 +46,7 @@ class MultiRegionDetector:
                 "alert_active": False,
                 "last_alert_time": 0,
                 "alert_triggered": False,
-                "should_play_sound": False
+                "should_play_sound": False,
             }
 
         # Fingertip indices
