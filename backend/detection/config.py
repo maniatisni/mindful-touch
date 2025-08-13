@@ -16,6 +16,7 @@ class Config:
     # Detection settings
     CONTACT_THRESHOLD = 0.05  # Distance threshold for contact detection
     MIN_DETECTION_TIME = 0.3  # Seconds before triggering alert
+    MIN_MINDFUL_CONTACT_TIME = 0.2  # Minimum contact time to count as mindful stop
 
     # Visual settings
     REGION_COLOR = (0, 255, 255)  # Yellow region outlines

@@ -33,25 +33,84 @@ class CameraThread(QThread):
         self.running = False
         self.detector = None
         self.cap = None
+        self.is_stopping = False
 
     def start_detection(self):
-        self.detector = MultiRegionDetector()
-        self.cap = cv2.VideoCapture(0)
+        """Start detection with proper state protection"""
+        # Prevent starting if already running or stopping
+        if self.running or self.is_stopping or self.isRunning():
+            print("Detection already running or stopping, ignoring start request")
+            return True  # Return True to not show error state in UI
 
-        if not self.cap.isOpened():
+        try:
+            # Clean up any existing resources first
+            self._cleanup_resources()
+
+            # Create new detector and camera
+            self.detector = MultiRegionDetector()
+            self.cap = cv2.VideoCapture(0)
+
+            if not self.cap.isOpened():
+                print("Failed to open camera")
+                self._cleanup_resources()
+                return False
+
+            # Set state and start thread
+            self.running = True
+            self.is_stopping = False
+            self.start()
+            return True
+
+        except Exception as e:
+            print(f"Error starting detection: {e}")
+            self._cleanup_resources()
             return False
 
-        self.running = True
-        self.start()
-        return True
-
     def stop_detection(self):
-        self.running = False
-        if self.cap:
-            self.cap.release()
-        if self.detector:
-            self.detector.cleanup()
-        self.wait()
+        """Stop detection with proper state protection"""
+        # Prevent double stopping
+        if not self.running and not self.isRunning():
+            print("Detection not running, ignoring stop request")
+            return
+
+        if self.is_stopping:
+            print("Already stopping, ignoring stop request")
+            return
+
+        try:
+            print("Stopping detection...")
+            self.is_stopping = True
+            self.running = False
+
+            # Wait for thread to finish with timeout
+            if self.isRunning():
+                if not self.wait(3000):  # 3 second timeout
+                    print("Warning: Thread did not stop gracefully, forcing termination")
+                    self.terminate()
+                    self.wait(1000)  # Wait 1 more second after terminate
+
+            # Clean up resources
+            self._cleanup_resources()
+            self.is_stopping = False
+            print("Detection stopped successfully")
+
+        except Exception as e:
+            print(f"Error stopping detection: {e}")
+            self.is_stopping = False
+
+    def _cleanup_resources(self):
+        """Clean up camera and detector resources"""
+        try:
+            if self.cap:
+                self.cap.release()
+                self.cap = None
+
+            if self.detector:
+                self.detector.cleanup()
+                self.detector = None
+
+        except Exception as e:
+            print(f"Error during cleanup: {e}")
 
     def run(self):
         while self.running and self.cap and self.cap.isOpened():
@@ -72,6 +131,7 @@ class MainWindow(QMainWindow):
         self.is_detecting = False
         self.show_feed = True
         self.current_flash_state = "none"
+        self.is_transitioning = False  # Prevent rapid state changes
 
         # Session tracking
         self.session_start_time = None
@@ -150,89 +210,169 @@ class MainWindow(QMainWindow):
         self.camera_panel.toggle_privacy.connect(self.toggle_privacy)
 
     def update_camera(self, frame):
-        # Only update camera if detection is running
-        if self.is_detecting:
-            height, width, channel = frame.shape
-            bytes_per_line = 3 * width
-            q_image = QImage(frame.data, width, height, bytes_per_line, QImage.Format.Format_RGB888).rgbSwapped()
+        """Update camera display with error handling"""
+        try:
+            # Only update camera if detection is running
+            if self.is_detecting and frame is not None:
+                height, width, channel = frame.shape
+                bytes_per_line = 3 * width
+                q_image = QImage(frame.data, width, height, bytes_per_line, QImage.Format.Format_RGB888).rgbSwapped()
 
-            pixmap = QPixmap.fromImage(q_image)
-            # Scale to fit camera panel size
-            scaled_pixmap = pixmap.scaled(720, 540, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
-            self.camera_panel.update_camera_frame(scaled_pixmap)
+                pixmap = QPixmap.fromImage(q_image)
+                # Scale to fit camera panel size
+                scaled_pixmap = pixmap.scaled(720, 540, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+                self.camera_panel.update_camera_frame(scaled_pixmap)
+        except Exception as e:
+            print(f"Error updating camera display: {e}")
+            # Don't crash the app on camera display errors
 
     def update_detection(self, data):
-        # Update visual flash state
-        regions_with_contact = data.get("regions_with_contact", [])
-        region_details = data.get("region_details", {})
-        alerts_active = data.get("alerts_active", [])
+        """Update detection data with error handling"""
+        try:
+            if not data or not self.is_detecting:
+                return
 
-        # Play sound when alerts are triggered (with proper cooldown from backend)
-        if alerts_active:
-            self._play_alert_sound()
+            # Update visual flash state
+            regions_with_contact = data.get("regions_with_contact", [])
+            region_details = data.get("region_details", {})
+            alerts_active = data.get("alerts_active", [])
+            mindful_stops_detected = data.get("mindful_stops_detected", [])
 
-        # Check if any regions have active alerts
-        active_alert_regions = [region for region, details in region_details.items() if details.get("alert_active", False)]
-        current_alert_state = len(active_alert_regions) > 0
+            # Play sound when alerts are triggered (with proper cooldown from backend)
+            if alerts_active:
+                self._play_alert_sound()
 
-        # Track session statistics
-        if current_alert_state and not self.last_alert_state:
-            # New alert triggered
-            self.total_detections += 1
-        elif self.last_alert_state and not current_alert_state:
-            # Alert ended (potential mindful stop)
-            self.mindful_stops += 1
+            # Check if any regions have active alerts
+            active_alert_regions = [region for region, details in region_details.items() if details.get("alert_active", False)]
+            current_alert_state = len(active_alert_regions) > 0
 
-        self.last_alert_state = current_alert_state
+            # Track session statistics
+            if current_alert_state and not self.last_alert_state:
+                # New alert triggered
+                self.total_detections += 1
+            elif self.last_alert_state and not current_alert_state:
+                # Alert ended (also count as mindful stop)
+                self.mindful_stops += 1
 
-        # Update status badge
-        if active_alert_regions:
-            self.status_badge.set_status("alert")
-            self.set_flash_state("red")
-        elif regions_with_contact:
-            self.status_badge.set_status("detecting")
-            self.set_flash_state("orange")
-        else:
-            if self.is_detecting:
+            # Count quick hand removals as mindful stops
+            if mindful_stops_detected:
+                self.mindful_stops += len(mindful_stops_detected)
+                print(f"Mindful stop detected in regions: {mindful_stops_detected}")
+
+            self.last_alert_state = current_alert_state
+
+            # Update status badge
+            if active_alert_regions:
+                self.status_badge.set_status("alert")
+                self.set_flash_state("red")
+            elif regions_with_contact:
                 self.status_badge.set_status("detecting")
+                self.set_flash_state("orange")
             else:
-                self.status_badge.set_status("ready")
-            self.set_flash_state("none")
+                if self.is_detecting:
+                    self.status_badge.set_status("detecting")
+                else:
+                    self.status_badge.set_status("ready")
+                self.set_flash_state("none")
 
-        # Update activity stats
-        session_minutes = self._get_session_minutes()
-        self.camera_panel.update_stats(self.total_detections, session_minutes, self.mindful_stops)
+            # Update activity stats
+            session_minutes = self._get_session_minutes()
+            self.camera_panel.update_stats(self.total_detections, session_minutes, self.mindful_stops)
+
+        except Exception as e:
+            print(f"Error updating detection data: {e}")
+            # Don't crash the app on detection update errors
 
     def start_detection(self):
-        """Start detection process"""
-        if self.camera_thread.start_detection():
-            self.is_detecting = True
-            self.session_start_time = time.time()
-            self.total_detections = 0
-            self.mindful_stops = 0
-            self.last_alert_state = False
+        """Start detection process with UI state management"""
+        # Prevent rapid clicking
+        if self.is_transitioning or self.is_detecting:
+            print("Start detection ignored - already detecting or transitioning")
+            return
 
-            # Start session timer
-            self.session_timer.start(1000)  # Update every second
+        try:
+            print("Starting detection...")
+            self.is_transitioning = True
 
-            # Update UI
-            self.camera_panel.set_detection_state(True)
+            # Disable buttons during transition
+            self._set_buttons_enabled(False)
             self.status_badge.set_status("detecting")
 
+            # Attempt to start camera thread
+            if self.camera_thread.start_detection():
+                # Success - update state
+                self.is_detecting = True
+                self.session_start_time = time.time()
+                self.total_detections = 0
+                self.mindful_stops = 0
+                self.last_alert_state = False
+
+                # Start session timer
+                self.session_timer.start(1000)  # Update every second
+
+                # Update UI
+                self.camera_panel.set_detection_state(True)
+                print("Detection started successfully")
+
+            else:
+                # Failed to start - revert state
+                print("Failed to start detection")
+                self.status_badge.set_status("ready")
+
+        except Exception as e:
+            print(f"Error in start_detection: {e}")
+            self.status_badge.set_status("ready")
+
+        finally:
+            self.is_transitioning = False
+            self._set_buttons_enabled(True)
+
     def stop_detection(self):
-        """Stop detection process"""
-        self.camera_thread.stop_detection()
-        self.is_detecting = False
-        self.session_start_time = None
+        """Stop detection process with UI state management"""
+        # Prevent rapid clicking
+        if self.is_transitioning or not self.is_detecting:
+            print("Stop detection ignored - not detecting or transitioning")
+            return
 
-        # Stop session timer
-        self.session_timer.stop()
+        try:
+            print("Stopping detection...")
+            self.is_transitioning = True
 
-        # Update UI
-        self.camera_panel.set_detection_state(False)
-        self.status_badge.set_status("ready")
-        self.show_feed = True
-        self.set_flash_state("none")
+            # Disable buttons during transition
+            self._set_buttons_enabled(False)
+
+            # Stop camera thread
+            self.camera_thread.stop_detection()
+
+            # Update state
+            self.is_detecting = False
+            self.session_start_time = None
+
+            # Stop session timer
+            self.session_timer.stop()
+
+            # Update UI
+            self.camera_panel.set_detection_state(False)
+            self.status_badge.set_status("ready")
+            self.show_feed = True
+            self.set_flash_state("none")
+            print("Detection stopped successfully")
+
+        except Exception as e:
+            print(f"Error in stop_detection: {e}")
+
+        finally:
+            self.is_transitioning = False
+            self._set_buttons_enabled(True)
+
+    def _set_buttons_enabled(self, enabled):
+        """Enable/disable detection buttons during state transitions"""
+        try:
+            # Enable/disable detection button
+            if hasattr(self.camera_panel, "detection_card") and hasattr(self.camera_panel.detection_card, "detection_button"):
+                self.camera_panel.detection_card.detection_button.setEnabled(enabled)
+        except Exception as e:
+            print(f"Error setting button states: {e}")
 
     def toggle_privacy(self):
         """Toggle camera feed visibility without stopping detection"""
@@ -304,9 +444,32 @@ class MainWindow(QMainWindow):
             print(f"Could not play sound: {e}")
 
     def closeEvent(self, event):
-        if self.is_detecting:
-            self.stop_detection()
-        event.accept()
+        """Ensure proper cleanup when app is closed"""
+        try:
+            print("Application closing, cleaning up...")
+
+            # Stop detection if running
+            if self.is_detecting:
+                print("Stopping detection before exit...")
+                self.camera_thread.stop_detection()
+
+            # Stop any timers
+            if self.session_timer.isActive():
+                self.session_timer.stop()
+
+            # Force cleanup of camera thread
+            if self.camera_thread.isRunning():
+                print("Forcing camera thread cleanup...")
+                self.camera_thread.terminate()
+                self.camera_thread.wait(2000)  # Wait up to 2 seconds
+
+            print("Application cleanup completed")
+
+        except Exception as e:
+            print(f"Error during application cleanup: {e}")
+
+        finally:
+            event.accept()
 
 
 def main():

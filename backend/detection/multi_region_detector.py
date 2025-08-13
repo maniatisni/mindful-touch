@@ -47,6 +47,7 @@ class MultiRegionDetector:
                 "last_alert_time": 0,
                 "alert_triggered": False,
                 "should_play_sound": False,
+                "mindful_stop_detected": False,
             }
 
         # Fingertip indices
@@ -90,6 +91,7 @@ class MultiRegionDetector:
             "active_regions": list(filtered_data.keys()),
             "regions_with_contact": [region for region, data in filtered_data.items() if len(data["contacts"]) > 0],
             "alerts_active": [region for region, data in filtered_data.items() if data.get("should_play_sound", False)],
+            "mindful_stops_detected": [region for region, data in filtered_data.items() if data.get("mindful_stop_detected", False)],
             "region_details": filtered_data,
         }
 
@@ -334,8 +336,9 @@ class MultiRegionDetector:
             settings = Config.REGION_SETTINGS[region]
             has_contact = len(contacts) > 0
 
-            # Reset sound trigger flag at start of each frame
+            # Reset flags at start of each frame
             state["should_play_sound"] = False
+            state["mindful_stop_detected"] = False
 
             if has_contact:
                 if state["contact_start_time"] is None:
@@ -365,7 +368,21 @@ class MultiRegionDetector:
                 else:
                     state["alert_active"] = False
             else:
-                # No contact - reset all state
+                # No contact - check for mindful stop before resetting
+                if state["contact_start_time"] is not None:
+                    # Calculate how long the contact lasted
+                    contact_duration = current_time - state["contact_start_time"]
+
+                    # Check if this qualifies as a mindful stop
+                    # Must be long enough to be intentional but short enough to avoid alert
+                    if (
+                        contact_duration >= Config.MIN_MINDFUL_CONTACT_TIME
+                        and contact_duration < settings["min_detection_time"]
+                        and not state["alert_triggered"]
+                    ):
+                        state["mindful_stop_detected"] = True
+
+                # Reset all state
                 state["contact_start_time"] = None
                 state["alert_active"] = False
                 state["alert_triggered"] = False
@@ -375,6 +392,7 @@ class MultiRegionDetector:
                 "contacts": contacts,
                 "alert_active": state["alert_active"],
                 "should_play_sound": state["should_play_sound"],
+                "mindful_stop_detected": state["mindful_stop_detected"],
                 "contact_duration": (current_time - state["contact_start_time"] if state["contact_start_time"] else 0),
             }
 
