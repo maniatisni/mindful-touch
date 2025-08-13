@@ -1,20 +1,25 @@
 #!/usr/bin/env python3
 """
-Minimal PyQt6 Implementation of Mindful Touch
-Camera feed with visual detection triggers only
+Mindful Touch - Modern Glass UI Implementation
+Facial touch detection with beautiful, minimal interface
 """
 
 import sys
+import time
+import subprocess
 
 import cv2
 import numpy as np
-from PyQt6.QtCore import Qt, QThread, pyqtSignal
+from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer
 from PyQt6.QtGui import QImage, QPixmap
-from PyQt6.QtWidgets import QApplication, QHBoxLayout, QLabel, QMainWindow, QPushButton, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QApplication, QHBoxLayout, QMainWindow, QVBoxLayout, QWidget
 
 from backend.detection.config import Config
 from backend.detection.multi_region_detector import MultiRegionDetector
-from ui import SettingsPanel, StatusOverlay
+from ui.styles.theme import Theme
+from ui.widgets.status_badge import StatusBadge, AppHeader
+from ui.panels.detection_panel import DetectionPanel
+from ui.panels.camera_panel import CameraPanel
 
 
 class CameraThread(QThread):
@@ -66,250 +71,208 @@ class MainWindow(QMainWindow):
         self.camera_thread = CameraThread()
         self.is_detecting = False
         self.show_feed = True
-        self.current_flash_state = "none"  # Track current flash state
+        self.current_flash_state = "none"
+        
+        # Session tracking
+        self.session_start_time = None
+        self.total_detections = 0
+        self.mindful_stops = 0
+        self.last_alert_state = False
+        
+        # Timer for session updates
+        self.session_timer = QTimer()
+        self.session_timer.timeout.connect(self._update_session_timer)
+        
         self.setup_ui()
         self.connect_signals()
 
     def setup_ui(self):
         self.setWindowTitle("Mindful Touch")
-        self.setMinimumSize(1000, 600)
+        self.setMinimumSize(Theme.WINDOW_MIN_WIDTH, Theme.WINDOW_MIN_HEIGHT)
+        
+        # Set glass background
+        self.setStyleSheet(f"""
+            QMainWindow {{
+                background: {Theme.BACKGROUND};
+            }}
+        """)
 
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
-        main_layout = QHBoxLayout(central_widget)
-
-        # Left side - Camera and controls
-        left_widget = QWidget()
-        left_layout = QVBoxLayout(left_widget)
-
-        # Title
-        title = QLabel("Mindful Touch")
-        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title.setStyleSheet("font-size: 24px; font-weight: bold; margin: 20px;")
-        left_layout.addWidget(title)
-
-        # Camera container
-        camera_container = QWidget()
-        camera_container.setMinimumSize(640, 480)
-        container_layout = QVBoxLayout(camera_container)
-        container_layout.setContentsMargins(0, 0, 0, 0)
-
-        # Camera label
-        self.camera_label = QLabel("Camera will appear here\nClick Start to begin")
-        self.camera_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.camera_label.setStyleSheet("""
-            QLabel {
-                background-color: #f0f0f0;
-                border: 2px solid #ccc;
-                border-radius: 8px;
-                font-size: 16px;
-                color: #666;
-            }
-        """)
-        self.camera_label.setMinimumSize(640, 480)
-        container_layout.addWidget(self.camera_label)
-
-        # Overlay
-        self.overlay = StatusOverlay()
-        self.overlay.setParent(camera_container)
-        self.overlay.move(10, 10)
-
-        left_layout.addWidget(camera_container)
-
-        # Control buttons
-        button_layout = QHBoxLayout()
-
-        self.control_button = QPushButton("Start Detection")
-        self.control_button.setStyleSheet("""
-            QPushButton {
-                background-color: #4CAF50;
-                color: white;
-                border: none;
-                padding: 15px 30px;
-                font-size: 16px;
-                border-radius: 8px;
-                margin: 10px;
-            }
-            QPushButton:hover {
-                background-color: #45a049;
-            }
-        """)
-
-        self.privacy_button = QPushButton("Hide Feed")
-        self.privacy_button.setEnabled(False)  # Disabled until detection starts
-        self.privacy_button.setStyleSheet("""
-            QPushButton {
-                background-color: #FF9800;
-                color: white;
-                border: none;
-                padding: 15px 30px;
-                font-size: 16px;
-                border-radius: 8px;
-                margin: 10px;
-            }
-            QPushButton:hover {
-                background-color: #F57C00;
-            }
-            QPushButton:disabled {
-                background-color: #ccc;
-                color: #666;
-            }
-        """)
-
-        button_layout.addWidget(self.control_button)
-        button_layout.addWidget(self.privacy_button)
-        left_layout.addLayout(button_layout)
-
-        # Right side - Settings panel
-        self.settings_panel = SettingsPanel()
-        self.settings_panel.setFixedWidth(250)
-
-        main_layout.addWidget(left_widget)
-        main_layout.addWidget(self.settings_panel)
+        
+        # Main layout with margins
+        main_layout = QVBoxLayout(central_widget)
+        main_layout.setContentsMargins(Theme.CARD_MARGIN, Theme.CARD_MARGIN, Theme.CARD_MARGIN, Theme.CARD_MARGIN)
+        main_layout.setSpacing(Theme.CARD_MARGIN)
+        
+        # Header
+        header_layout = QHBoxLayout()
+        header_layout.setSpacing(Theme.ITEM_SPACING)
+        
+        # App title
+        self.app_header = AppHeader()
+        header_layout.addWidget(self.app_header)
+        
+        header_layout.addStretch()
+        
+        # Status badge
+        self.status_badge = StatusBadge()
+        header_layout.addWidget(self.status_badge)
+        
+        main_layout.addLayout(header_layout)
+        
+        # Content area - 2 column layout
+        content_layout = QHBoxLayout()
+        content_layout.setSpacing(Theme.CARD_MARGIN)
+        
+        # Left panel - Detection controls
+        self.detection_panel = DetectionPanel()
+        self.detection_panel.setFixedWidth(400)
+        content_layout.addWidget(self.detection_panel)
+        
+        # Right panel - Camera and stats
+        self.camera_panel = CameraPanel()
+        content_layout.addWidget(self.camera_panel)
+        
+        main_layout.addLayout(content_layout)
 
     def connect_signals(self):
+        # Camera thread signals
         self.camera_thread.frame_ready.connect(self.update_camera)
         self.camera_thread.detection_data.connect(self.update_detection)
-        self.control_button.clicked.connect(self.toggle_detection)
-        self.privacy_button.clicked.connect(self.toggle_privacy)
-
-        # Connect settings panel signals
-        self.settings_panel.region_toggled.connect(self.toggle_region)
-        self.settings_panel.contact_duration_changed.connect(self.update_contact_duration)
+        
+        # Panel signals
+        self.detection_panel.region_toggled.connect(self.toggle_region)
+        self.detection_panel.contact_duration_changed.connect(self.update_contact_duration)
+        
+        self.camera_panel.start_detection.connect(self.start_detection)
+        self.camera_panel.stop_detection.connect(self.stop_detection)
+        self.camera_panel.toggle_privacy.connect(self.toggle_privacy)
 
     def update_camera(self, frame):
-        # Only update camera if detection is running AND feed should be shown
-        if self.is_detecting and self.show_feed:
+        # Only update camera if detection is running
+        if self.is_detecting:
             height, width, channel = frame.shape
             bytes_per_line = 3 * width
             q_image = QImage(frame.data, width, height, bytes_per_line, QImage.Format.Format_RGB888).rgbSwapped()
 
             pixmap = QPixmap.fromImage(q_image)
-            scaled_pixmap = pixmap.scaled(self.camera_label.size(), Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
-            self.camera_label.setPixmap(scaled_pixmap)
+            # Scale to fit camera panel size
+            scaled_pixmap = pixmap.scaled(720, 540, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+            self.camera_panel.update_camera_frame(scaled_pixmap)
 
     def update_detection(self, data):
-        self.overlay.update_status(data)
-
-        # Simplified hierarchical flash system
+        # Update visual flash state
         regions_with_contact = data.get("regions_with_contact", [])
         region_details = data.get("region_details", {})
-
-        # Check if any regions have active alerts (visual feedback)
+        alerts_active = data.get("alerts_active", [])
+        
+        # Play sound when alerts are triggered (with proper cooldown from backend)
+        if alerts_active:
+            self._play_alert_sound()
+        
+        # Check if any regions have active alerts  
         active_alert_regions = [region for region, details in region_details.items() if details.get("alert_active", False)]
-
+        current_alert_state = len(active_alert_regions) > 0
+        
+        # Track session statistics
+        if current_alert_state and not self.last_alert_state:
+            # New alert triggered
+            self.total_detections += 1
+        elif self.last_alert_state and not current_alert_state:
+            # Alert ended (potential mindful stop)
+            self.mindful_stops += 1
+        
+        self.last_alert_state = current_alert_state
+        
+        # Update status badge
         if active_alert_regions:
-            # Red background - persistent while alert is active
+            self.status_badge.set_status("alert")
             self.set_flash_state("red")
         elif regions_with_contact:
-            # Orange flash - brief flash for proximity
+            self.status_badge.set_status("detecting")
             self.set_flash_state("orange")
         else:
-            # No contact - clear background
+            if self.is_detecting:
+                self.status_badge.set_status("detecting")
+            else:
+                self.status_badge.set_status("ready")
             self.set_flash_state("none")
+        
+        # Update activity stats
+        session_minutes = self._get_session_minutes()
+        self.camera_panel.update_stats(self.total_detections, session_minutes, self.mindful_stops)
 
-    def toggle_detection(self):
-        if not self.is_detecting:
-            if self.camera_thread.start_detection():
-                self.is_detecting = True
-                self.control_button.setText("Stop Detection")
-                self.control_button.setStyleSheet("""
-                    QPushButton {
-                        background-color: #f44336;
-                        color: white;
-                        border: none;
-                        padding: 15px 30px;
-                        font-size: 16px;
-                        border-radius: 8px;
-                        margin: 10px;
-                    }
-                    QPushButton:hover {
-                        background-color: #da190b;
-                    }
-                """)
-                self.privacy_button.setEnabled(True)
-        else:
-            self.camera_thread.stop_detection()
-            self.is_detecting = False
-            self.control_button.setText("Start Detection")
-            self.control_button.setStyleSheet("""
-                QPushButton {
-                    background-color: #4CAF50;
-                    color: white;
-                    border: none;
-                    padding: 15px 30px;
-                    font-size: 16px;
-                    border-radius: 8px;
-                    margin: 20px;
-                }
-                QPushButton:hover {
-                    background-color: #45a049;
-                }
-            """)
-            self.privacy_button.setEnabled(False)
-            self.privacy_button.setText("Hide Feed")
-            self.show_feed = True  # Reset to show feed
-            # Show initial screen
-            self.camera_label.clear()
-            self.camera_label.setText("Camera will appear here\nClick Start to begin")
+    def start_detection(self):
+        """Start detection process"""
+        if self.camera_thread.start_detection():
+            self.is_detecting = True
+            self.session_start_time = time.time()
+            self.total_detections = 0
+            self.mindful_stops = 0
+            self.last_alert_state = False
+            
+            # Start session timer
+            self.session_timer.start(1000)  # Update every second
+            
+            # Update UI
+            self.camera_panel.set_detection_state(True)
+            self.status_badge.set_status("detecting")
+    
+    def stop_detection(self):
+        """Stop detection process"""
+        self.camera_thread.stop_detection()
+        self.is_detecting = False
+        self.session_start_time = None
+        
+        # Stop session timer
+        self.session_timer.stop()
+        
+        # Update UI
+        self.camera_panel.set_detection_state(False)
+        self.status_badge.set_status("ready")
+        self.show_feed = True
+        self.set_flash_state("none")
 
     def toggle_privacy(self):
         """Toggle camera feed visibility without stopping detection"""
         self.show_feed = not self.show_feed
-
-        if self.show_feed:
-            self.privacy_button.setText("Hide Feed")
-            self.privacy_button.setStyleSheet("""
-                QPushButton {
-                    background-color: #FF9800;
-                    color: white;
-                    border: none;
-                    padding: 15px 30px;
-                    font-size: 16px;
-                    border-radius: 8px;
-                    margin: 10px;
-                }
-                QPushButton:hover {
-                    background-color: #F57C00;
-                }
-            """)
-        else:
-            self.privacy_button.setText("Show Feed")
-            self.privacy_button.setStyleSheet("""
-                QPushButton {
-                    background-color: #607D8B;
-                    color: white;
-                    border: none;
-                    padding: 15px 30px;
-                    font-size: 16px;
-                    border-radius: 8px;
-                    margin: 10px;
-                }
-                QPushButton:hover {
-                    background-color: #546E7A;
-                }
-            """)
-            # Show privacy message when feed is hidden
-            self.camera_label.clear()
-            self.camera_label.setText("🔒 Privacy Mode Active\nDetection running in background\nClick 'Show Feed' to view camera")
-            self.camera_label.setStyleSheet(self.camera_label.styleSheet() + "font-size: 18px; color: #666;")
+        self.camera_panel.set_privacy_state(self.show_feed)
 
     def set_flash_state(self, state):
-        """Simple persistent flash state - no timers"""
+        """Update flash state with glass theme"""
         if state == self.current_flash_state:
-            return  # No change needed
+            return
 
         self.current_flash_state = state
 
         if state == "red":
-            # Red background - persistent while alert active
-            self.setStyleSheet("QMainWindow { background-color: rgba(255, 0, 0, 100); }")
+            # Red overlay for alerts
+            self.setStyleSheet(f"""
+                QMainWindow {{
+                    background: {Theme.BACKGROUND};
+                }}
+                QMainWindow::after {{
+                    background: rgba(231, 76, 60, 0.2);
+                }}
+            """)
         elif state == "orange":
-            # Orange background - persistent while in proximity
-            self.setStyleSheet("QMainWindow { background-color: rgba(255, 165, 0, 80); }")
-        else:  # state == "none"
-            # Clear background
-            self.setStyleSheet("")
+            # Orange overlay for proximity
+            self.setStyleSheet(f"""
+                QMainWindow {{
+                    background: {Theme.BACKGROUND};
+                }}
+                QMainWindow::after {{
+                    background: rgba(255, 152, 0, 0.15);
+                }}
+            """)
+        else:
+            # Normal glass background
+            self.setStyleSheet(f"""
+                QMainWindow {{
+                    background: {Theme.BACKGROUND};
+                }}
+            """)
 
     def toggle_region(self, region: str, enabled: bool):
         """Handle region toggle from settings panel"""
@@ -320,9 +283,29 @@ class MainWindow(QMainWindow):
         """Handle contact duration change from settings panel"""
         Config.update_contact_duration(duration)
 
+    def _update_session_timer(self):
+        """Update session timer display"""
+        if self.is_detecting and self.session_start_time:
+            session_minutes = self._get_session_minutes()
+            self.camera_panel.update_stats(self.total_detections, session_minutes, self.mindful_stops)
+    
+    def _get_session_minutes(self):
+        """Get current session duration in minutes"""
+        if self.session_start_time:
+            elapsed = time.time() - self.session_start_time
+            return int(elapsed // 60)
+        return 0
+    
+    def _play_alert_sound(self):
+        """Play alert sound - cooldown already handled by backend"""
+        try:
+            subprocess.Popen(["afplay", "/System/Library/Sounds/Glass.aiff", "-t", "0.35"])
+        except Exception as e:
+            print(f"Could not play sound: {e}")
+
     def closeEvent(self, event):
         if self.is_detecting:
-            self.camera_thread.stop_detection()
+            self.stop_detection()
         event.accept()
 
 
