@@ -192,10 +192,13 @@ class MainWindow(QMainWindow):
         self.overlay.update_status(data)
 
         # Simplified hierarchical flash system
-        alerts_active = data.get("alerts_active", [])
         regions_with_contact = data.get("regions_with_contact", [])
+        region_details = data.get("region_details", {})
 
-        if alerts_active:
+        # Check if any regions have active alerts (visual feedback)
+        active_alert_regions = [region for region, details in region_details.items() if details.get("alert_active", False)]
+
+        if active_alert_regions:
             # Red background - persistent while alert is active
             self.set_flash_state("red")
         elif regions_with_contact:

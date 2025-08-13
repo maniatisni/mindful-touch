@@ -30,11 +30,11 @@ class Config:
 
     # Region-specific settings
     REGION_SETTINGS = {
-        "scalp": {"contact_threshold": 0.05, "min_detection_time": 1.0, "show_landmarks": True},
-        "eyebrows": {"contact_threshold": 0.02, "min_detection_time": 1.0, "show_landmarks": True},
-        "eyes": {"contact_threshold": 0.02, "min_detection_time": 1.0, "show_landmarks": True},
-        "mouth": {"contact_threshold": 0.03, "min_detection_time": 1.0, "show_landmarks": True},
-        "beard": {"contact_threshold": 0.04, "min_detection_time": 1.0, "show_landmarks": True},
+        "scalp": {"contact_threshold": 0.05, "min_detection_time": 1.0, "alert_cooldown_time": 1.0, "show_landmarks": True},
+        "eyebrows": {"contact_threshold": 0.02, "min_detection_time": 1.0, "alert_cooldown_time": 1.0, "show_landmarks": True},
+        "eyes": {"contact_threshold": 0.02, "min_detection_time": 1.0, "alert_cooldown_time": 1.0, "show_landmarks": True},
+        "mouth": {"contact_threshold": 0.03, "min_detection_time": 1.0, "alert_cooldown_time": 1.0, "show_landmarks": True},
+        "beard": {"contact_threshold": 0.04, "min_detection_time": 1.0, "alert_cooldown_time": 1.0, "show_landmarks": True},
     }
 
     @classmethod

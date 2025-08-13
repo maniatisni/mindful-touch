@@ -40,13 +40,25 @@ jobs:
           echo "App contents:"
           ls -la "dist/Mindful Touch.app/Contents/MacOS/"
 
-      - name: Create DMG for distribution
+      - name: Create DMG for distribution with drag-to-Applications
         run: |
+          # Create temporary directory for DMG contents
+          mkdir -p dmg-temp
+          cp -R "dist/Mindful Touch.app" dmg-temp/
+          
+          # Create symbolic link to Applications folder
+          ln -s /Applications dmg-temp/Applications
+          
+          # Create DMG with proper layout
           hdiutil create -volname "Mindful Touch" \
-            -srcfolder "dist/Mindful Touch.app" \
+            -srcfolder dmg-temp \
             -ov -format UDZO \
             "dist/Mindful-Touch-${{ github.ref_name }}.dmg"
-          echo "✅ DMG created successfully"
+          
+          # Clean up temp directory
+          rm -rf dmg-temp
+          
+          echo "✅ DMG with drag-to-Applications created successfully"
           # Verify DMG size and info
           ls -lh "dist/Mindful-Touch-${{ github.ref_name }}.dmg"
 

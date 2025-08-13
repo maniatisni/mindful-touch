@@ -61,10 +61,16 @@ class StatusOverlay(QWidget):
         regions_with_contact = data.get("regions_with_contact", [])
         alerts = data.get("alerts_active", [])
 
+        # Play sound only when explicitly triggered (with cooldown)
         if alerts:
-            status_text = f"{', '.join(alerts)} ALERT"
-            status_color = "#ff6b6b"
             self._play_alert_sound()
+
+        # Determine visual status (independent of sound)
+        active_alert_regions = [region for region, data in data.get("region_details", {}).items() if data.get("alert_active", False)]
+
+        if active_alert_regions:
+            status_text = f"{', '.join(active_alert_regions)} ALERT"
+            status_color = "#ff6b6b"
         elif regions_with_contact:
             status_text = f"{', '.join(regions_with_contact)} proximity"
             status_color = "#FF9800"

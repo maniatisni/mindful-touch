@@ -41,7 +41,13 @@ class MultiRegionDetector:
         # Detection state for each region
         self.region_states = {}
         for region in Config.AVAILABLE_REGIONS:
-            self.region_states[region] = {"contact_start_time": None, "alert_active": False, "last_alert_time": 0, "alert_triggered": False}
+            self.region_states[region] = {
+                "contact_start_time": None,
+                "alert_active": False,
+                "last_alert_time": 0,
+                "alert_triggered": False,
+                "should_play_sound": False
+            }
 
         # Fingertip indices
         self.FINGERTIPS = [4, 8, 12, 16, 20]
@@ -83,7 +89,8 @@ class MultiRegionDetector:
             "contact_points": sum(len(data["contacts"]) for data in filtered_data.values()),
             "active_regions": list(filtered_data.keys()),
             "regions_with_contact": [region for region, data in filtered_data.items() if len(data["contacts"]) > 0],
-            "alerts_active": [region for region, data in filtered_data.items() if data.get("alert_active", False)],
+            "alerts_active": [region for region, data in filtered_data.items() if data.get("should_play_sound", False)],
+            "region_details": filtered_data,
         }
 
         return annotated_frame, detection_data
@@ -318,7 +325,7 @@ class MultiRegionDetector:
         return np.array(beard_points, dtype=np.int32)
 
     def _apply_temporal_filtering(self, contact_data: Dict[str, List]) -> Dict[str, Dict]:
-        """Apply temporal filtering for each region"""
+        """Apply temporal filtering with proper alert cooldown for each region"""
         current_time = time.time()
         filtered_data = {}
 
@@ -327,31 +334,47 @@ class MultiRegionDetector:
             settings = Config.REGION_SETTINGS[region]
             has_contact = len(contacts) > 0
 
+            # Reset sound trigger flag at start of each frame
+            state["should_play_sound"] = False
+
             if has_contact:
                 if state["contact_start_time"] is None:
+                    # New contact started
                     state["contact_start_time"] = current_time
-                    state["last_alert_time"] = 0  # Reset alert timer
+                    state["alert_triggered"] = False
+                    state["last_alert_time"] = 0
 
                 # Check if contact persisted long enough
                 duration = current_time - state["contact_start_time"]
                 if duration >= settings["min_detection_time"]:
-                    # Alert is active for entire sustained contact duration
-                    if not state.get("alert_triggered", False):
-                        # First time triggering - play sound
+                    state["alert_active"] = True
+
+                    # Check if we should trigger a sound
+                    if not state["alert_triggered"]:
+                        # First alert - play sound immediately
+                        state["should_play_sound"] = True
                         state["alert_triggered"] = True
                         state["last_alert_time"] = current_time
-                    state["alert_active"] = True
+                    elif state["last_alert_time"] > 0:
+                        # Subsequent alerts - use same interval as min_detection_time
+                        time_since_last_alert = current_time - state["last_alert_time"]
+                        if time_since_last_alert >= settings["min_detection_time"]:
+                            # Cooldown period has passed - play sound again
+                            state["should_play_sound"] = True
+                            state["last_alert_time"] = current_time
                 else:
                     state["alert_active"] = False
             else:
-                # Reset contact tracking
+                # No contact - reset all state
                 state["contact_start_time"] = None
                 state["alert_active"] = False
                 state["alert_triggered"] = False
+                state["last_alert_time"] = 0
 
             filtered_data[region] = {
                 "contacts": contacts,
                 "alert_active": state["alert_active"],
+                "should_play_sound": state["should_play_sound"],
                 "contact_duration": (current_time - state["contact_start_time"] if state["contact_start_time"] else 0),
             }
 
