@@ -11,25 +11,20 @@ from ui.styles.theme import Theme
 
 class StatusBadge(QLabel):
     """Colored status indicator badge"""
-    
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.set_status("ready")
-    
+
     def set_status(self, status):
         """Update badge status and appearance"""
-        status_map = {
-            "ready": "Ready",
-            "detecting": "Detecting", 
-            "alert": "Alert",
-            "error": "Error"
-        }
-        
+        status_map = {"ready": "Ready", "detecting": "Detecting", "alert": "Alert", "error": "Error"}
+
         text = status_map.get(status, "Unknown")
         self.setText(text)
         self.setStyleSheet(Theme.status_badge_style(status))
-        
+
         # Adjust size to content
         self.adjustSize()
         self.setMinimumHeight(32)
@@ -37,7 +32,7 @@ class StatusBadge(QLabel):
 
 class AppHeader(QLabel):
     """App title with icon"""
-    
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setText("🧘‍♀️ Mindful Touch")
