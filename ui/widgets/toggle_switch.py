@@ -15,7 +15,7 @@ class ToggleSwitch(QCheckBox):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setFixedSize(60, 32)
+        self.setFixedSize(44, 26)
 
         # Animation setup
         self._circle_position = 3
@@ -46,7 +46,7 @@ class ToggleSwitch(QCheckBox):
         if state == Qt.CheckState.Checked.value:
             # Move circle to right
             self.animation.setStartValue(self._circle_position)
-            self.animation.setEndValue(29)  # 60 - 26 - 5 (width - circle - padding)
+            self.animation.setEndValue(21)  # 44 - 20 - 3 (width - thumb - padding)
         else:
             # Move circle to left
             self.animation.setStartValue(self._circle_position)
@@ -65,11 +65,11 @@ class ToggleSwitch(QCheckBox):
 
         painter.setBrush(track_color)
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.drawRoundedRect(track_rect, 16, 16)
+        painter.drawRoundedRect(track_rect, 13, 13)
 
         # Circle (thumb)
-        circle_rect = QRect(int(self._circle_position), 3, 26, 26)
-        painter.setBrush(QColor("#FFFFFF"))
+        circle_rect = QRect(int(self._circle_position), 3, 20, 20)
+        painter.setBrush(QColor(Theme.THUMB))
         painter.drawEllipse(circle_rect)
 
     def hitButton(self, pos):

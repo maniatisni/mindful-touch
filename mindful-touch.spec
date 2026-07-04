@@ -20,6 +20,9 @@ datas = [
     # Include MediaPipe model files
     (f'{mediapipe_site}/modules', 'mediapipe/modules'),
     (f'{mediapipe_site}/python/solutions', 'mediapipe/python/solutions'),
+    # Bundled Work Sans fonts + logo
+    ('assets/fonts', 'assets/fonts'),
+    ('assets/logo.svg', 'assets'),
 ]
 
 a = Analysis(
@@ -32,6 +35,8 @@ a = Analysis(
         'PyQt6.QtCore',
         'PyQt6.QtGui',
         'PyQt6.QtWidgets',
+        'PyQt6.QtSvg',
+        'PyQt6.QtSvgWidgets',
         # MediaPipe dependencies
         'mediapipe',
         'cv2',

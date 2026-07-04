@@ -1,6 +1,5 @@
 """
-Camera Panel - Right side display
-Live detection feed and activity stats
+Camera Panel - live feed with session stats inside one surface card
 """
 
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal
@@ -9,11 +8,57 @@ from PyQt6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidg
 from ui.styles.theme import Theme
 
 
-class LiveDetectionCard(QWidget):
-    """Card for camera feed and controls"""
+class StatBlock(QWidget):
+    """Big number over a muted caption"""
 
-    start_detection = pyqtSignal()
-    stop_detection = pyqtSignal()
+    def __init__(self, value, caption, value_color=None, parent=None):
+        super().__init__(parent)
+        self.value_color = value_color or Theme.INK
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(2)
+
+        self.value_label = QLabel(value)
+        self.value_label.setStyleSheet(self._value_style(self.value_color))
+        layout.addWidget(self.value_label)
+
+        caption_label = QLabel(caption)
+        caption_label.setStyleSheet(f"""
+            QLabel {{
+                font-family: {Theme.FONT_BODY};
+                font-size: 12px;
+                color: {Theme.MUTED};
+                border: none;
+                background: transparent;
+            }}
+        """)
+        layout.addWidget(caption_label)
+
+    @staticmethod
+    def _value_style(color):
+        return f"""
+            QLabel {{
+                font-family: {Theme.FONT_TITLE};
+                font-size: 22px;
+                font-weight: 700;
+                color: {color};
+                border: none;
+                background: transparent;
+            }}
+        """
+
+    def set_value(self, text):
+        self.value_label.setText(text)
+
+    def flash(self, color, duration_ms=1500):
+        """Briefly recolor the value, then restore"""
+        self.value_label.setStyleSheet(self._value_style(color))
+        QTimer.singleShot(duration_ms, lambda: self.value_label.setStyleSheet(self._value_style(self.value_color)))
+
+
+class CameraPanel(QWidget):
+    """Left panel: camera feed card with stats row"""
+
     toggle_privacy = pyqtSignal()
 
     def __init__(self, parent=None):
@@ -21,103 +66,115 @@ class LiveDetectionCard(QWidget):
         self.is_detecting = False
         self.show_feed = True
         self.setup_ui()
-        self.setStyleSheet(Theme.card_style())
 
     def setup_ui(self):
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(Theme.CARD_PADDING, Theme.CARD_PADDING, Theme.CARD_PADDING, Theme.CARD_PADDING)
-        layout.setSpacing(Theme.ITEM_SPACING)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
 
-        # Title
-        title = QLabel("Live Detection")
-        title.setStyleSheet(Theme.section_title_style())
-        layout.addWidget(title)
-
-        # Camera display - no container wrapper to avoid clipping
-        self.camera_label = QLabel()
-        self.camera_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.camera_label.setMinimumSize(480, 360)
-        self.camera_label.setStyleSheet(f"""
-            QLabel {{
-                background-color: rgba(255, 255, 255, 0.05);
-                border: none;
+        card = QWidget()
+        card.setObjectName("cameraCard")
+        card.setStyleSheet(f"""
+            QWidget#cameraCard {{
+                background-color: {Theme.SURFACE};
+                border: 1px solid {Theme.BORDER};
                 border-radius: {Theme.BORDER_RADIUS}px;
-                color: {Theme.TEXT_SECONDARY};
-                font-family: {Theme.FONT_BODY};
-                font-size: {Theme.FONT_SIZE_BODY}px;
-                margin-bottom: {Theme.ITEM_SPACING}px;
             }}
         """)
+        outer.addWidget(card)
 
-        # Default message
-        self._set_default_message()
-        layout.addWidget(self.camera_label)
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(0)
 
-        # Controls
-        controls_layout = QHBoxLayout()
-        controls_layout.setSpacing(Theme.ITEM_SPACING)
+        # Header row: label left, hide-feed button right
+        header_row = QHBoxLayout()
+        header_row.setSpacing(Theme.ITEM_SPACING)
 
-        # Detection button
-        self.detection_button = QPushButton("Start Detection")
-        self.detection_button.setStyleSheet(Theme.button_primary_style())
-        self.detection_button.clicked.connect(self._on_detection_button_clicked)
+        title = QLabel("Camera")
+        title.setStyleSheet(Theme.section_title_style())
+        header_row.addWidget(title)
+        header_row.addStretch()
 
-        # Privacy button - secondary style
-        self.privacy_button = QPushButton("Hide Feed")
+        self.privacy_button = QPushButton("Hide feed")
         self.privacy_button.setEnabled(False)
-        self.privacy_button.setStyleSheet(Theme.button_secondary_style())
-        self.privacy_button.clicked.connect(self._on_privacy_button_clicked)
+        self.privacy_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.privacy_button.setStyleSheet(self._privacy_button_style())
+        self.privacy_button.clicked.connect(self.toggle_privacy.emit)
+        header_row.addWidget(self.privacy_button)
 
-        controls_layout.addWidget(self.detection_button)
-        controls_layout.addWidget(self.privacy_button)
-        controls_layout.addStretch()
-        layout.addLayout(controls_layout)
+        layout.addLayout(header_row)
+        layout.addSpacing(14)
+
+        # Camera display
+        self.camera_label = QLabel()
+        self.camera_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.camera_label.setMinimumSize(480, 320)
+        self.camera_label.setStyleSheet(f"""
+            QLabel {{
+                background-color: {Theme.FEED_BG};
+                border: none;
+                border-radius: 12px;
+                color: {Theme.INK_SOFT};
+                font-family: {Theme.FONT_BODY};
+                font-size: 14px;
+            }}
+        """)
+        self._set_default_message()
+        layout.addWidget(self.camera_label, stretch=1)
+        layout.addSpacing(18)
+
+        # Stats row
+        stats_row = QHBoxLayout()
+        stats_row.setSpacing(Theme.SECTION_SPACING)
+
+        self.session_stat = StatBlock("00:00:00", "Session")
+        stats_row.addWidget(self.session_stat)
+
+        self.touches_stat = StatBlock("0", "Touches noticed")
+        stats_row.addWidget(self.touches_stat)
+
+        self.stops_stat = StatBlock("0", "Mindful stops", value_color=Theme.SAGE)
+        stats_row.addWidget(self.stops_stat)
+
+        stats_row.addStretch()
+        layout.addLayout(stats_row)
+
+    @staticmethod
+    def _privacy_button_style():
+        return f"""
+            QPushButton {{
+                background-color: transparent;
+                color: {Theme.INK_SOFT};
+                border: 1px solid {Theme.BORDER};
+                border-radius: 13px;
+                font-family: {Theme.FONT_BODY};
+                font-size: 12px;
+                font-weight: 600;
+                padding: 4px 14px;
+            }}
+            QPushButton:hover {{
+                border-color: {Theme.PRIMARY};
+                color: {Theme.PRIMARY};
+            }}
+            QPushButton:disabled {{
+                color: {Theme.TOGGLE_OFF};
+                border-color: {Theme.HAIRLINE};
+            }}
+        """
 
     def _set_default_message(self):
         """Set default camera message"""
         self.camera_label.setText(
-            "Camera Preview\n\nPress  Start Detection  to begin.\n\nPosition yourself so your face\nis clearly visible in the frame."
+            "Camera preview\n\nPress  Start detection  to begin.\n\nPosition yourself so your face\nis clearly visible in the frame."
         )
-
-    def _on_detection_button_clicked(self):
-        """Handle detection button click"""
-        if not self.is_detecting:
-            self.start_detection.emit()
-        else:
-            self.stop_detection.emit()
-
-    def _on_privacy_button_clicked(self):
-        """Handle privacy button click"""
-        self.toggle_privacy.emit()
 
     def set_detection_state(self, detecting):
         """Update UI for detection state"""
         self.is_detecting = detecting
-
-        if detecting:
-            self.detection_button.setText("Stop Detection")
-            self.detection_button.setStyleSheet(f"""
-                QPushButton {{
-                    background-color: {Theme.ERROR_600};
-                    color: {Theme.WHITE};
-                    border: none;
-                    border-radius: 8px;
-                    font-family: {Theme.FONT_BODY};
-                    font-size: {Theme.FONT_SIZE_BODY}px;
-                    font-weight: 600;
-                    padding: 12px 24px;
-                    min-height: 44px;
-                }}
-                QPushButton:hover {{
-                    background-color: rgba(201, 72, 59, 0.9);
-                }}
-            """)
-            self.privacy_button.setEnabled(True)
-        else:
-            self.detection_button.setText("Start Detection")
-            self.detection_button.setStyleSheet(Theme.button_primary_style())
-            self.privacy_button.setEnabled(False)
-            self.privacy_button.setText("Hide Feed")
+        self.privacy_button.setEnabled(detecting)
+        if not detecting:
+            self.privacy_button.setText("Hide feed")
             self.show_feed = True
             self._set_default_message()
 
@@ -126,191 +183,24 @@ class LiveDetectionCard(QWidget):
         self.show_feed = show_feed
 
         if show_feed:
-            self.privacy_button.setText("Hide Feed")
-            self.privacy_button.setStyleSheet(Theme.button_secondary_style())
+            self.privacy_button.setText("Hide feed")
         else:
-            self.privacy_button.setText("Show Feed")
-            self.privacy_button.setStyleSheet(Theme.button_secondary_style())
-            self.camera_label.setText("🔒 Privacy Mode Active\n\nDetection running in background\nClick 'Show Feed' to view camera")
+            self.privacy_button.setText("Show feed")
+            self.camera_label.setText("Privacy mode\n\nDetection keeps running in the background.\nPress  Show feed  to view the camera.")
 
     def update_camera_frame(self, pixmap):
         """Update camera display with new frame"""
         if self.show_feed:
             self.camera_label.setPixmap(pixmap)
 
-
-class ActivityCard(QWidget):
-    """Card for session statistics with subtle backdrop"""
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setup_ui()
-        # Use PRIMARY_100 backdrop as suggested by designer
-        self.setStyleSheet(f"""
-            QWidget {{
-                background-color: {Theme.PRIMARY_100};
-                border: 1px solid {Theme.CARD_BORDER};
-                border-radius: 12px;
-            }}
-        """)
-
-    def setup_ui(self):
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(Theme.CARD_PADDING, Theme.CARD_PADDING, Theme.CARD_PADDING, Theme.CARD_PADDING)
-        layout.setSpacing(Theme.ITEM_SPACING)
-
-        # Title
-        title = QLabel("Today's Activity")
-        title.setStyleSheet(Theme.section_title_style())
-        layout.addWidget(title)
-
-        # Stats grid
-        stats_layout = QHBoxLayout()
-        stats_layout.setSpacing(Theme.SECTION_SPACING)
-
-        # Detections counter
-        self.detections_widget = self._create_stat_widget("0", "DETECTIONS", Theme.PRIMARY_600)
-        stats_layout.addWidget(self.detections_widget)
-
-        # Session timer
-        self.session_widget = self._create_stat_widget("0m", "SESSION", Theme.PRIMARY_600)
-        stats_layout.addWidget(self.session_widget)
-
-        # Mindful stops (placeholder)
-        self.stops_widget = self._create_stat_widget("0", "MINDFUL STOPS", Theme.PRIMARY_600)
-        stats_layout.addWidget(self.stops_widget)
-
-        layout.addLayout(stats_layout)
-
-    def _create_stat_widget(self, value, label, color):
-        """Create a stat display widget"""
-        widget = QWidget()
-        layout = QVBoxLayout(widget)
-        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.setSpacing(4)
-
-        # Value (big number)
-        value_label = QLabel(value)
-        value_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        value_label.setStyleSheet(self._stat_value_style(color))
-
-        # Label (small text)
-        text_label = QLabel(label)
-        text_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        text_label.setStyleSheet(f"""
-            QLabel {{
-                font-family: {Theme.FONT_BODY};
-                font-size: {Theme.FONT_SIZE_SMALL}px;
-                font-weight: 600;
-                color: {Theme.TEXT_SECONDARY};
-                text-transform: uppercase;
-                letter-spacing: 0.5px;
-                margin: 0;
-                border: none;
-                background: transparent;
-            }}
-        """)
-
-        layout.addWidget(value_label)
-        layout.addWidget(text_label)
-
-        # Store references for updates
-        widget.value_label = value_label
-        widget.text_label = text_label
-
-        return widget
-
-    def update_detections(self, count):
-        """Update detections counter"""
-        self.detections_widget.value_label.setText(str(count))
-
-    def update_session_time(self, minutes):
-        """Update session timer"""
-        if minutes < 60:
-            text = f"{minutes}m"
-        else:
-            hours = minutes // 60
-            mins = minutes % 60
-            text = f"{hours}h {mins}m"
-        self.session_widget.value_label.setText(text)
-
-    def update_mindful_stops(self, count):
-        """Update mindful stops counter (placeholder)"""
-        self.stops_widget.value_label.setText(str(count))
-
-    @staticmethod
-    def _stat_value_style(color):
-        """Stylesheet for the big stat number"""
-        return f"""
-            QLabel {{
-                font-family: {Theme.FONT_TITLE};
-                font-size: 36px;
-                font-weight: 700;
-                color: {color};
-                margin: 0;
-                border: none;
-                background: transparent;
-            }}
-        """
-
-    def show_mindful_stop_flash(self):
-        """Briefly highlight the mindful stops stat in green"""
-        self.stops_widget.value_label.setStyleSheet(self._stat_value_style(Theme.SUCCESS_600))
-        QTimer.singleShot(1500, self._reset_stops_color)
-
-    def _reset_stops_color(self):
-        """Restore the mindful stops stat to its normal color"""
-        self.stops_widget.value_label.setStyleSheet(self._stat_value_style(Theme.PRIMARY_600))
-
-
-class CameraPanel(QWidget):
-    """Right panel containing camera feed and stats"""
-
-    start_detection = pyqtSignal()
-    stop_detection = pyqtSignal()
-    toggle_privacy = pyqtSignal()
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setup_ui()
-
-    def setup_ui(self):
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(Theme.CARD_MARGIN)
-
-        # Live detection card
-        self.detection_card = LiveDetectionCard()
-        self.detection_card.start_detection.connect(self.start_detection.emit)
-        self.detection_card.stop_detection.connect(self.stop_detection.emit)
-        self.detection_card.toggle_privacy.connect(self.toggle_privacy.emit)
-        layout.addWidget(self.detection_card)
-
-        # Activity card
-        self.activity_card = ActivityCard()
-        layout.addWidget(self.activity_card)
-
-        # Stretch to push cards to top
-        layout.addStretch()
-
-    def set_detection_state(self, detecting):
-        """Update detection state"""
-        self.detection_card.set_detection_state(detecting)
-
-    def set_privacy_state(self, show_feed):
-        """Update privacy state"""
-        self.detection_card.set_privacy_state(show_feed)
-
-    def update_camera_frame(self, pixmap):
-        """Update camera frame"""
-        self.detection_card.update_camera_frame(pixmap)
-
-    def update_stats(self, detections, session_minutes, mindful_stops):
-        """Update activity statistics"""
-        self.activity_card.update_detections(detections)
-        self.activity_card.update_session_time(session_minutes)
-        self.activity_card.update_mindful_stops(mindful_stops)
+    def update_stats(self, detections, session_seconds, mindful_stops):
+        """Update the stats row"""
+        hours, rem = divmod(int(session_seconds), 3600)
+        minutes, seconds = divmod(rem, 60)
+        self.session_stat.set_value(f"{hours:02d}:{minutes:02d}:{seconds:02d}")
+        self.touches_stat.set_value(str(detections))
+        self.stops_stat.set_value(str(mindful_stops))
 
     def show_mindful_stop_flash(self):
         """Briefly highlight the mindful stops stat"""
-        self.activity_card.show_mindful_stop_flash()
+        self.stops_stat.flash(Theme.SAGE_HOVER)

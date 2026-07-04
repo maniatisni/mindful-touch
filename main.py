@@ -4,14 +4,16 @@ Mindful Touch - Modern Glass UI Implementation
 Facial touch detection with beautiful, minimal interface
 """
 
+import os
 import subprocess
 import sys
 import time
+from pathlib import Path
 
 import cv2
 import numpy as np
 from PyQt6.QtCore import Qt, QThread, QTimer, pyqtSignal
-from PyQt6.QtGui import QAction, QImage, QPixmap
+from PyQt6.QtGui import QAction, QFont, QFontDatabase, QImage, QPixmap
 from PyQt6.QtWidgets import QApplication, QHBoxLayout, QMainWindow, QMessageBox, QVBoxLayout, QWidget
 
 from backend.detection import settings_store
@@ -23,6 +25,21 @@ from ui.styles.theme import Theme
 from ui.widgets.status_badge import AppHeader, StatusBadge
 
 ALERT_SOUND = "/System/Library/Sounds/Glass.aiff"
+
+
+def resource_path(relative):
+    """Resolve a bundled resource path (works in dev and inside PyInstaller)"""
+    base = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(base, relative)
+
+
+def load_fonts():
+    """Register bundled Work Sans weights with Qt"""
+    fonts_dir = Path(resource_path("assets/fonts"))
+    if fonts_dir.exists():
+        for font_file in sorted(fonts_dir.glob("*.ttf")):
+            # addApplicationFontFromData: file-path loading is unreliable on macOS
+            QFontDatabase.addApplicationFontFromData(font_file.read_bytes())
 
 
 class CameraThread(QThread):
@@ -168,13 +185,22 @@ class MainWindow(QMainWindow):
         central_widget.setStyleSheet(self._central_style())
         self.setCentralWidget(central_widget)
 
-        # Main layout with margins
+        # Main layout: full-width header bar with hairline, then padded content
         main_layout = QVBoxLayout(central_widget)
-        main_layout.setContentsMargins(Theme.CARD_MARGIN, Theme.CARD_MARGIN, Theme.CARD_MARGIN, Theme.CARD_MARGIN)
-        main_layout.setSpacing(Theme.CARD_MARGIN)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
 
-        # Header
-        header_layout = QHBoxLayout()
+        # Header bar (border spans the full window width, like the design)
+        header_bar = QWidget()
+        header_bar.setObjectName("headerBar")
+        header_bar.setStyleSheet(f"""
+            QWidget#headerBar {{
+                background: transparent;
+                border-bottom: 1px solid {Theme.BORDER};
+            }}
+        """)
+        header_layout = QHBoxLayout(header_bar)
+        header_layout.setContentsMargins(32, 22, 32, 18)
         header_layout.setSpacing(Theme.ITEM_SPACING)
 
         # App title
@@ -187,20 +213,20 @@ class MainWindow(QMainWindow):
         self.status_badge = StatusBadge()
         header_layout.addWidget(self.status_badge)
 
-        main_layout.addLayout(header_layout)
+        main_layout.addWidget(header_bar)
 
-        # Content area - 2 column layout
+        # Content area - 2 column layout (camera 1.4fr / controls 1fr)
         content_layout = QHBoxLayout()
+        content_layout.setContentsMargins(32, Theme.CARD_MARGIN, 32, 32)
         content_layout.setSpacing(Theme.CARD_MARGIN)
 
-        # Left panel - Detection controls
-        self.detection_panel = DetectionPanel()
-        self.detection_panel.setFixedWidth(400)
-        content_layout.addWidget(self.detection_panel)
-
-        # Right panel - Camera and stats
+        # Left panel - Camera and stats
         self.camera_panel = CameraPanel()
-        content_layout.addWidget(self.camera_panel)
+        content_layout.addWidget(self.camera_panel, stretch=7)
+
+        # Right panel - Detection controls
+        self.detection_panel = DetectionPanel()
+        content_layout.addWidget(self.detection_panel, stretch=5)
 
         main_layout.addLayout(content_layout)
 
@@ -239,10 +265,16 @@ class MainWindow(QMainWindow):
         # Panel signals
         self.detection_panel.region_toggled.connect(self.toggle_region)
         self.detection_panel.contact_duration_changed.connect(self.update_contact_duration)
+        self.detection_panel.detection_button_clicked.connect(self._on_detection_button)
 
-        self.camera_panel.start_detection.connect(self.start_detection)
-        self.camera_panel.stop_detection.connect(self.stop_detection)
         self.camera_panel.toggle_privacy.connect(self.toggle_privacy)
+
+    def _on_detection_button(self):
+        """Start/pause toggle from the detection panel"""
+        if self.is_detecting:
+            self.stop_detection()
+        else:
+            self.start_detection()
 
     def update_camera(self, frame):
         """Update camera display with error handling"""
@@ -255,7 +287,7 @@ class MainWindow(QMainWindow):
 
                 pixmap = QPixmap.fromImage(q_image)
                 # Scale to fit the actual camera label size
-                label_size = self.camera_panel.detection_card.camera_label.size()
+                label_size = self.camera_panel.camera_label.size()
                 scaled_pixmap = pixmap.scaled(label_size, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
                 self.camera_panel.update_camera_frame(scaled_pixmap)
         except Exception as e:
@@ -313,8 +345,7 @@ class MainWindow(QMainWindow):
                 self.set_flash_state("none")
 
             # Update activity stats
-            session_minutes = self._get_session_minutes()
-            self.camera_panel.update_stats(self.total_detections, session_minutes, self.mindful_stops)
+            self.camera_panel.update_stats(self.total_detections, self._get_session_seconds(), self.mindful_stops)
 
         except Exception as e:
             print(f"Error updating detection data: {e}")
@@ -349,6 +380,7 @@ class MainWindow(QMainWindow):
 
                 # Update UI
                 self.camera_panel.set_detection_state(True)
+                self.detection_panel.set_detection_state(True)
                 print("Detection started successfully")
 
             else:
@@ -390,6 +422,7 @@ class MainWindow(QMainWindow):
 
             # Update UI
             self.camera_panel.set_detection_state(False)
+            self.detection_panel.set_detection_state(False)
             self.status_badge.set_status("ready")
             self.show_feed = True
             self.set_flash_state("none")
@@ -405,9 +438,7 @@ class MainWindow(QMainWindow):
     def _set_buttons_enabled(self, enabled):
         """Enable/disable detection buttons during state transitions"""
         try:
-            # Enable/disable detection button
-            if hasattr(self.camera_panel, "detection_card") and hasattr(self.camera_panel.detection_card, "detection_button"):
-                self.camera_panel.detection_card.detection_button.setEnabled(enabled)
+            self.detection_panel.set_button_enabled(enabled)
         except Exception as e:
             print(f"Error setting button states: {e}")
 
@@ -419,10 +450,10 @@ class MainWindow(QMainWindow):
     def _central_style(self, tint=None, border_color=None):
         """Build the central widget stylesheet, optionally tinted for alerts"""
         if tint and border_color:
-            background = f"qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 {tint}, stop:1 {Theme.PRIMARY_100})"
+            background = tint
             border = f"border-top: 3px solid {border_color};"
         else:
-            background = Theme.BACKGROUND
+            background = Theme.CANVAS
             border = ""
         return f"""
             QWidget#central {{
@@ -439,9 +470,11 @@ class MainWindow(QMainWindow):
         self.current_flash_state = state
 
         if state == "red":
-            style = self._central_style("rgba(231, 76, 60, 0.12)", Theme.ERROR_600)
+            # Touch noticed — warm clay tint
+            style = self._central_style(Theme.SOFT_CLAY, Theme.CLAY)
         elif state == "orange":
-            style = self._central_style("rgba(255, 152, 0, 0.10)", Theme.WARNING_500)
+            # Hand near a region — gentle blue tint
+            style = self._central_style(Theme.SOFT_BLUE, Theme.PRIMARY)
         else:
             style = self._central_style()
         self.centralWidget().setStyleSheet(style)
@@ -467,14 +500,12 @@ class MainWindow(QMainWindow):
     def _update_session_timer(self):
         """Update session timer display"""
         if self.is_detecting and self.session_start_time:
-            session_minutes = self._get_session_minutes()
-            self.camera_panel.update_stats(self.total_detections, session_minutes, self.mindful_stops)
+            self.camera_panel.update_stats(self.total_detections, self._get_session_seconds(), self.mindful_stops)
 
-    def _get_session_minutes(self):
-        """Get current session duration in minutes"""
+    def _get_session_seconds(self):
+        """Get current session duration in seconds"""
         if self.session_start_time:
-            elapsed = time.time() - self.session_start_time
-            return int(elapsed // 60)
+            return int(time.time() - self.session_start_time)
         return 0
 
     def _play_alert_sound(self):
@@ -515,6 +546,8 @@ class MainWindow(QMainWindow):
 
 def main():
     app = QApplication(sys.argv)
+    load_fonts()
+    app.setFont(QFont(Theme.FONT_BODY, 13))
     window = MainWindow()
     window.show()
     sys.exit(app.exec())

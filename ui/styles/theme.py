@@ -1,94 +1,112 @@
 """
-Professional color system for Mindful Touch
-Based on UX designer specifications with accessibility compliance
+Mindful Touch design system
+Calm, warm, minimal — dusty blue / sage / clay on warm cream
 """
+
+# Logo mark: two strokes on a 48x48 grid (cup in dusty blue, heart in clay)
+LOGO_SVG = """<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
+  <path d="M8 27 C8 35 15 41 24 41 C33 41 40 35 40 27" fill="none" stroke="#5C7C99" stroke-width="5" stroke-linecap="round"/>
+  <path d="M24 22 C24 22 14 15 14 9 A5 5 0 0 1 24 9 A5 5 0 0 1 34 9 C34 15 24 22 24 22 Z" fill="none" stroke="#B67F5C" stroke-width="4"/>
+</svg>"""
 
 
 class Theme:
-    # Core color tokens (light theme) - warmer tones
-    PRIMARY_600 = "#2F6BA9"
-    PRIMARY_500 = "#3B7CBE"
-    PRIMARY_100 = "#F0F4F8"
-    SUCCESS_600 = "#2E8857"
-    WARNING_500 = "#F2A63A"
-    ERROR_600 = "#C9483B"
+    # Core color tokens
+    CANVAS = "#F7F3EC"  # App window background
+    SURFACE = "#FFFFFF"  # Cards, panels
+    INK = "#2B2926"  # Primary text
+    INK_SOFT = "#6B655D"  # Secondary/body text
+    MUTED = "#A2957F"  # Small caps labels, captions
+    BORDER = "#E4DCCE"  # Card borders, dividers
+    HAIRLINE = "#F0EAE0"  # Row separators inside cards
 
-    # Neutral palette - warmer grays
-    NEUTRAL_900 = "#1A1818"  # Text primary - warmer black
-    NEUTRAL_700 = "#3B3F4A"  # Text secondary/icons - warmer gray
-    NEUTRAL_500 = "#8A8E9E"  # Borders - warmer gray
-    NEUTRAL_300 = "#C8CDD8"  # Dividers - warmer gray
-    NEUTRAL_100 = "#EEEEEE"  # Cards - much more subtle
-    CANVAS = "#F2F2F2"  # Window background - much less bright
+    PRIMARY = "#5C7C99"  # Dusty blue — buttons, links, active toggle
+    PRIMARY_HOVER = "#4C6C89"
+    SAGE = "#7C9473"  # Success / ready / mindful stops
+    SAGE_HOVER = "#688061"
+    CLAY = "#B67F5C"  # Touch noticed / alert accents
+    CLAY_BORDER = "#E6D9CC"  # Outlined clay button border
+
+    SOFT_BLUE = "#E7EDF1"  # Detecting pill background
+    SOFT_SAGE = "#EEF2EA"  # Ready pill background
+    SOFT_CLAY = "#F3E8DE"  # Touch noticed pill background
+
+    TOGGLE_OFF = "#D8CFBE"  # Inactive toggle track
+    THUMB = "#FFF9F4"  # Toggle thumb / cream text on primary
+    FEED_BG = "#EFEAE2"  # Camera placeholder background
+
     WHITE = "#FFFFFF"
 
-    # Focus and interaction
-    FOCUS_RING = "rgba(77, 154, 240, 0.4)"
+    # Legacy aliases (kept so existing widget code keeps working)
+    BACKGROUND = CANVAS
+    CARD_BACKGROUND = SURFACE
+    CARD_BORDER = BORDER
+    TEXT_PRIMARY = INK
+    TEXT_SECONDARY = INK_SOFT
+    TEXT_MUTED = MUTED
+    PRIMARY_600 = PRIMARY
+    PRIMARY_500 = PRIMARY_HOVER
+    PRIMARY_100 = SOFT_BLUE
+    SUCCESS_600 = SAGE
+    ERROR_600 = CLAY
+    WARNING_500 = CLAY
+    NEUTRAL_300 = BORDER
+    NEUTRAL_500 = MUTED
+    TOGGLE_ACTIVE = PRIMARY
+    TOGGLE_INACTIVE = TOGGLE_OFF
 
-    # Legacy compatibility - map old names to new system
-    BACKGROUND = f"qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 {CANVAS}, stop:1 {PRIMARY_100})"
-    CARD_BACKGROUND = NEUTRAL_100
-    CARD_BORDER = NEUTRAL_300
-    CARD_SHADOW = "rgba(16, 20, 24, 0.08)"
-
-    # Text colors (updated)
-    TEXT_PRIMARY = NEUTRAL_900
-    TEXT_SECONDARY = NEUTRAL_700
-    TEXT_LIGHT = WHITE
-    TEXT_MUTED = NEUTRAL_500
-
-    # Accent colors (updated)
-    ACCENT_BLUE = PRIMARY_600
-    ACCENT_GREEN = SUCCESS_600
-    ACCENT_ORANGE = WARNING_500
-    ACCENT_RED = ERROR_600
-
-    # Toggle switch colors (updated)
-    TOGGLE_ACTIVE = PRIMARY_500
-    TOGGLE_INACTIVE = NEUTRAL_300
-    TOGGLE_BACKGROUND = "rgba(255, 255, 255, 0.2)"
-
-    # Spacing constants
-    CARD_MARGIN = 20
+    # Spacing & shape
+    CARD_MARGIN = 24
     CARD_PADDING = 24
-    ITEM_SPACING = 16
-    SECTION_SPACING = 32
+    ITEM_SPACING = 14
+    SECTION_SPACING = 24
     BORDER_RADIUS = 16
 
-    # Window settings
-    WINDOW_MIN_WIDTH = 1100
-    WINDOW_MIN_HEIGHT = 780
+    # Window settings (design frame is 1040x700)
+    WINDOW_MIN_WIDTH = 1040
+    WINDOW_MIN_HEIGHT = 700
 
-    # Fonts
-    FONT_TITLE = "SF Pro Display, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
-    FONT_BODY = "SF Pro Text, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
-    FONT_SIZE_TITLE = 28
-    FONT_SIZE_SECTION = 18
-    FONT_SIZE_BODY = 14
+    # Fonts — Work Sans is bundled and loaded at startup
+    FONT_TITLE = "Work Sans"
+    FONT_BODY = "Work Sans"
+    FONT_SIZE_TITLE = 18
+    FONT_SIZE_SECTION = 13
+    FONT_SIZE_BODY = 15
     FONT_SIZE_SMALL = 12
 
     @staticmethod
     def card_style():
-        """Standard card styling with elevation"""
+        """Standard surface card"""
         return f"""
             QWidget {{
-                background-color: {Theme.CARD_BACKGROUND};
-                border: 1px solid {Theme.CARD_BORDER};
-                border-radius: 12px;
-                /* Note: QSS doesn't support box-shadow, handled by container */
+                background-color: {Theme.SURFACE};
+                border: 1px solid {Theme.BORDER};
+                border-radius: {Theme.BORDER_RADIUS}px;
             }}
         """
 
     @staticmethod
     def section_title_style():
-        """Section title styling"""
+        """Small section label inside cards"""
         return f"""
             QLabel {{
-                font-family: {Theme.FONT_TITLE};
+                font-family: {Theme.FONT_BODY};
                 font-size: {Theme.FONT_SIZE_SECTION}px;
                 font-weight: 600;
-                color: {Theme.TEXT_PRIMARY};
-                margin-bottom: {Theme.ITEM_SPACING // 2}px;
+                color: {Theme.INK_SOFT};
+                border: none;
+                background: transparent;
+            }}
+        """
+
+    @staticmethod
+    def helper_text_style():
+        """Muted helper line under a section label"""
+        return f"""
+            QLabel {{
+                font-family: {Theme.FONT_BODY};
+                font-size: 13px;
+                color: {Theme.MUTED};
                 border: none;
                 background: transparent;
             }}
@@ -96,13 +114,12 @@ class Theme:
 
     @staticmethod
     def body_text_style():
-        """Body text styling"""
+        """Body text"""
         return f"""
             QLabel {{
                 font-family: {Theme.FONT_BODY};
                 font-size: {Theme.FONT_SIZE_BODY}px;
-                color: {Theme.TEXT_SECONDARY};
-                line-height: 1.4;
+                color: {Theme.INK};
                 border: none;
                 background: transparent;
             }}
@@ -110,73 +127,102 @@ class Theme:
 
     @staticmethod
     def button_primary_style():
-        """Primary button styling"""
+        """Primary pill button (dusty blue, cream text)"""
         return f"""
             QPushButton {{
-                background-color: {Theme.PRIMARY_600};
-                color: {Theme.WHITE};
+                background-color: {Theme.PRIMARY};
+                color: {Theme.THUMB};
                 border: none;
-                border-radius: 8px;
+                border-radius: 22px;
                 font-family: {Theme.FONT_BODY};
-                font-size: {Theme.FONT_SIZE_BODY}px;
+                font-size: 14px;
                 font-weight: 600;
-                padding: 12px 24px;
-                min-height: 44px;
+                padding: 12px 28px;
+                min-height: 20px;
             }}
             QPushButton:hover {{
-                background-color: rgba(47, 110, 169, 0.9);
+                background-color: {Theme.PRIMARY_HOVER};
             }}
             QPushButton:pressed {{
-                background-color: rgba(47, 110, 169, 0.8);
+                background-color: {Theme.PRIMARY_HOVER};
+            }}
+            QPushButton:disabled {{
+                background-color: {Theme.TOGGLE_OFF};
+                color: {Theme.SURFACE};
             }}
         """
 
     @staticmethod
     def button_secondary_style():
-        """Secondary button styling"""
+        """Quiet outlined pill button"""
         return f"""
             QPushButton {{
                 background-color: transparent;
-                color: {Theme.PRIMARY_600};
-                border: 1px solid {Theme.NEUTRAL_500};
-                border-radius: 8px;
+                color: {Theme.INK_SOFT};
+                border: 1px solid {Theme.BORDER};
+                border-radius: 22px;
                 font-family: {Theme.FONT_BODY};
-                font-size: {Theme.FONT_SIZE_BODY}px;
+                font-size: 14px;
                 font-weight: 600;
-                padding: 12px 24px;
-                min-height: 44px;
+                padding: 12px 28px;
+                min-height: 20px;
             }}
             QPushButton:hover {{
-                background-color: {Theme.PRIMARY_100};
-                border-color: {Theme.PRIMARY_600};
-            }}
-            QPushButton:pressed {{
-                background-color: rgba(232, 241, 250, 0.8);
+                background-color: {Theme.SOFT_BLUE};
+                border-color: {Theme.PRIMARY};
+                color: {Theme.PRIMARY};
             }}
             QPushButton:disabled {{
+                color: {Theme.TOGGLE_OFF};
+                border-color: {Theme.HAIRLINE};
+            }}
+        """
+
+    @staticmethod
+    def button_pause_style():
+        """Outlined clay pill button — pause detection"""
+        return f"""
+            QPushButton {{
                 background-color: transparent;
-                color: {Theme.NEUTRAL_500};
-                border-color: {Theme.NEUTRAL_300};
+                color: {Theme.CLAY};
+                border: 1px solid {Theme.CLAY_BORDER};
+                border-radius: 22px;
+                font-family: {Theme.FONT_BODY};
+                font-size: 14px;
+                font-weight: 600;
+                padding: 12px 28px;
+                min-height: 20px;
+            }}
+            QPushButton:hover {{
+                background-color: {Theme.SOFT_CLAY};
+                border-color: {Theme.CLAY};
+            }}
+            QPushButton:disabled {{
+                color: {Theme.TOGGLE_OFF};
+                border-color: {Theme.HAIRLINE};
             }}
         """
 
     @staticmethod
     def status_badge_style(status="ready"):
-        """Success chip styling - matches designer specs"""
-        colors = {"ready": Theme.SUCCESS_600, "detecting": Theme.PRIMARY_600, "alert": Theme.ERROR_600}
-        color = colors.get(status, Theme.SUCCESS_600)
+        """Soft status pill: colored text on a pale tinted background"""
+        colors = {
+            "ready": (Theme.SOFT_SAGE, Theme.SAGE),
+            "detecting": (Theme.SOFT_BLUE, Theme.PRIMARY),
+            "alert": (Theme.SOFT_CLAY, Theme.CLAY),
+            "error": (Theme.SOFT_CLAY, Theme.CLAY),
+        }
+        bg, fg = colors.get(status, (Theme.SOFT_SAGE, Theme.SAGE))
 
         return f"""
             QLabel {{
-                background-color: {color};
-                color: {Theme.WHITE};
+                background-color: {bg};
+                color: {fg};
                 border: none;
-                border-radius: 12px;
-                padding: 8px 16px;
+                border-radius: 14px;
+                padding: 6px 16px;
                 font-family: {Theme.FONT_BODY};
-                font-size: {Theme.FONT_SIZE_SMALL}px;
+                font-size: 12px;
                 font-weight: 600;
-                text-transform: uppercase;
-                letter-spacing: 0.5px;
             }}
         """

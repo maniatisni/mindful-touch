@@ -1,16 +1,17 @@
 """
 Status Badge Widget
-Shows current app status with colored indicators
+Soft status pill and app header with the logo mark
 """
 
 from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QLabel
+from PyQt6.QtSvgWidgets import QSvgWidget
+from PyQt6.QtWidgets import QHBoxLayout, QLabel, QWidget
 
-from ui.styles.theme import Theme
+from ui.styles.theme import LOGO_SVG, Theme
 
 
 class StatusBadge(QLabel):
-    """Colored status indicator badge"""
+    """Soft colored status pill"""
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -19,7 +20,7 @@ class StatusBadge(QLabel):
 
     def set_status(self, status):
         """Update badge status and appearance"""
-        status_map = {"ready": "Ready", "detecting": "Detecting", "alert": "Alert", "error": "Error"}
+        status_map = {"ready": "Ready", "detecting": "Detecting", "alert": "Touch noticed", "error": "Error"}
 
         text = status_map.get(status, "Unknown")
         self.setText(text)
@@ -27,24 +28,39 @@ class StatusBadge(QLabel):
 
         # Adjust size to content
         self.adjustSize()
-        self.setMinimumHeight(32)
+        self.setMinimumHeight(28)
 
 
-class AppHeader(QLabel):
-    """App title with icon"""
+class LogoMark(QSvgWidget):
+    """The Mindful Touch mark: cup in dusty blue, heart in clay"""
+
+    def __init__(self, size=20, parent=None):
+        super().__init__(parent)
+        self.load(LOGO_SVG.encode())
+        self.setFixedSize(size, size)
+        self.setStyleSheet("background: transparent; border: none;")
+
+
+class AppHeader(QWidget):
+    """Logo mark + wordmark"""
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setText("🧘‍♀️ Mindful Touch")
-        self.setStyleSheet(f"""
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(10)
+
+        layout.addWidget(LogoMark(20))
+
+        wordmark = QLabel("Mindful Touch")
+        wordmark.setStyleSheet(f"""
             QLabel {{
                 font-family: {Theme.FONT_TITLE};
                 font-size: {Theme.FONT_SIZE_TITLE}px;
                 font-weight: 700;
-                color: {Theme.TEXT_PRIMARY};
-                margin: 0;
+                color: {Theme.INK};
                 border: none;
                 background: transparent;
             }}
         """)
-        self.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        layout.addWidget(wordmark)
