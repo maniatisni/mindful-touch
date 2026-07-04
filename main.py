@@ -11,15 +11,18 @@ import time
 import cv2
 import numpy as np
 from PyQt6.QtCore import Qt, QThread, QTimer, pyqtSignal
-from PyQt6.QtGui import QImage, QPixmap
-from PyQt6.QtWidgets import QApplication, QHBoxLayout, QMainWindow, QVBoxLayout, QWidget
+from PyQt6.QtGui import QAction, QImage, QPixmap
+from PyQt6.QtWidgets import QApplication, QHBoxLayout, QMainWindow, QMessageBox, QVBoxLayout, QWidget
 
+from backend.detection import settings_store
 from backend.detection.config import Config
 from backend.detection.multi_region_detector import MultiRegionDetector
 from ui.panels.camera_panel import CameraPanel
 from ui.panels.detection_panel import DetectionPanel
 from ui.styles.theme import Theme
 from ui.widgets.status_badge import AppHeader, StatusBadge
+
+ALERT_SOUND = "/System/Library/Sounds/Glass.aiff"
 
 
 class CameraThread(QThread):
@@ -143,21 +146,26 @@ class MainWindow(QMainWindow):
         self.session_timer = QTimer()
         self.session_timer.timeout.connect(self._update_session_timer)
 
+        # Load persisted settings before building the UI so toggles initialize correctly
+        self.settings = settings_store.load()
+        Config.ACTIVE_REGIONS = [r for r in self.settings["active_regions"] if r in Config.AVAILABLE_REGIONS]
+        Config.update_contact_duration(self.settings["alert_delay"])
+
         self.setup_ui()
+        self.setup_menu()
         self.connect_signals()
+
+        self.detection_panel.set_contact_duration(self.settings["alert_delay"])
 
     def setup_ui(self):
         self.setWindowTitle("Mindful Touch")
         self.setMinimumSize(Theme.WINDOW_MIN_WIDTH, Theme.WINDOW_MIN_HEIGHT)
 
-        # Set glass background
-        self.setStyleSheet(f"""
-            QMainWindow {{
-                background: {Theme.BACKGROUND};
-            }}
-        """)
-
+        # Glass background lives on the central widget (targeted by objectName so
+        # flash styles never cascade into child widgets)
         central_widget = QWidget()
+        central_widget.setObjectName("central")
+        central_widget.setStyleSheet(self._central_style())
         self.setCentralWidget(central_widget)
 
         # Main layout with margins
@@ -196,6 +204,33 @@ class MainWindow(QMainWindow):
 
         main_layout.addLayout(content_layout)
 
+    def setup_menu(self):
+        menubar = self.menuBar()
+
+        app_menu = menubar.addMenu("Mindful Touch")
+
+        about_action = QAction("About Mindful Touch", self)
+        about_action.triggered.connect(self._show_about)
+        app_menu.addAction(about_action)
+
+        app_menu.addSeparator()
+
+        quit_action = QAction("Quit", self)
+        quit_action.setShortcut("Ctrl+Q")
+        quit_action.triggered.connect(self.close)
+        app_menu.addAction(quit_action)
+
+    def _show_about(self):
+        QMessageBox.about(
+            self,
+            "About Mindful Touch",
+            "Mindful Touch v1.0\n\n"
+            "A gentle awareness tool that helps you notice\n"
+            "unconscious face-touching habits.\n\n"
+            "All processing happens locally on your device.\n"
+            "No data is collected or transmitted.",
+        )
+
     def connect_signals(self):
         # Camera thread signals
         self.camera_thread.frame_ready.connect(self.update_camera)
@@ -219,8 +254,9 @@ class MainWindow(QMainWindow):
                 q_image = QImage(frame.data, width, height, bytes_per_line, QImage.Format.Format_RGB888).rgbSwapped()
 
                 pixmap = QPixmap.fromImage(q_image)
-                # Scale to fit camera panel size
-                scaled_pixmap = pixmap.scaled(720, 540, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+                # Scale to fit the actual camera label size
+                label_size = self.camera_panel.detection_card.camera_label.size()
+                scaled_pixmap = pixmap.scaled(label_size, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
                 self.camera_panel.update_camera_frame(scaled_pixmap)
         except Exception as e:
             print(f"Error updating camera display: {e}")
@@ -257,6 +293,7 @@ class MainWindow(QMainWindow):
             # Count quick hand removals as mindful stops
             if mindful_stops_detected:
                 self.mindful_stops += len(mindful_stops_detected)
+                self.camera_panel.show_mindful_stop_flash()
                 print(f"Mindful stop detected in regions: {mindful_stops_detected}")
 
             self.last_alert_state = current_alert_state
@@ -379,49 +416,53 @@ class MainWindow(QMainWindow):
         self.show_feed = not self.show_feed
         self.camera_panel.set_privacy_state(self.show_feed)
 
+    def _central_style(self, tint=None, border_color=None):
+        """Build the central widget stylesheet, optionally tinted for alerts"""
+        if tint and border_color:
+            background = f"qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 {tint}, stop:1 {Theme.PRIMARY_100})"
+            border = f"border-top: 3px solid {border_color};"
+        else:
+            background = Theme.BACKGROUND
+            border = ""
+        return f"""
+            QWidget#central {{
+                background: {background};
+                {border}
+            }}
+        """
+
     def set_flash_state(self, state):
-        """Update flash state with glass theme"""
+        """Tint the window background and top border to signal contact/alert"""
         if state == self.current_flash_state:
             return
 
         self.current_flash_state = state
 
         if state == "red":
-            # Red overlay for alerts
-            self.setStyleSheet(f"""
-                QMainWindow {{
-                    background: {Theme.BACKGROUND};
-                }}
-                QMainWindow::after {{
-                    background: rgba(231, 76, 60, 0.2);
-                }}
-            """)
+            style = self._central_style("rgba(231, 76, 60, 0.12)", Theme.ERROR_600)
         elif state == "orange":
-            # Orange overlay for proximity
-            self.setStyleSheet(f"""
-                QMainWindow {{
-                    background: {Theme.BACKGROUND};
-                }}
-                QMainWindow::after {{
-                    background: rgba(255, 152, 0, 0.15);
-                }}
-            """)
+            style = self._central_style("rgba(255, 152, 0, 0.10)", Theme.WARNING_500)
         else:
-            # Normal glass background
-            self.setStyleSheet(f"""
-                QMainWindow {{
-                    background: {Theme.BACKGROUND};
-                }}
-            """)
+            style = self._central_style()
+        self.centralWidget().setStyleSheet(style)
 
     def toggle_region(self, region: str, enabled: bool):
         """Handle region toggle from settings panel"""
-        if self.camera_thread.detector:
-            self.camera_thread.detector.toggle_region(region)
+        # Update Config directly so toggles work before detection starts too;
+        # the detector reads Config.ACTIVE_REGIONS live on every frame
+        if enabled and region not in Config.ACTIVE_REGIONS:
+            Config.ACTIVE_REGIONS.append(region)
+        elif not enabled and region in Config.ACTIVE_REGIONS:
+            Config.ACTIVE_REGIONS.remove(region)
+
+        self.settings["active_regions"] = list(Config.ACTIVE_REGIONS)
+        settings_store.save(self.settings)
 
     def update_contact_duration(self, duration: float):
         """Handle contact duration change from settings panel"""
         Config.update_contact_duration(duration)
+        self.settings["alert_delay"] = duration
+        settings_store.save(self.settings)
 
     def _update_session_timer(self):
         """Update session timer display"""
@@ -439,7 +480,7 @@ class MainWindow(QMainWindow):
     def _play_alert_sound(self):
         """Play alert sound - cooldown already handled by backend"""
         try:
-            subprocess.Popen(["afplay", "/System/Library/Sounds/Glass.aiff", "-t", "0.35"])
+            subprocess.Popen(["afplay", ALERT_SOUND, "-t", "0.35"])
         except Exception as e:
             print(f"Could not play sound: {e}")
 

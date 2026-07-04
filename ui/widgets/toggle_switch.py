@@ -3,7 +3,7 @@ iOS-style Toggle Switch Widget
 Smooth animated toggle for boolean settings
 """
 
-from PyQt6.QtCore import QEasingCurve, QPropertyAnimation, QRect, Qt, pyqtSignal
+from PyQt6.QtCore import QEasingCurve, QPropertyAnimation, QRect, Qt, pyqtProperty, pyqtSignal
 from PyQt6.QtGui import QColor, QPainter, QPaintEvent
 from PyQt6.QtWidgets import QCheckBox, QWidget
 
@@ -29,7 +29,8 @@ class ToggleSwitch(QCheckBox):
         # Remove default checkbox appearance
         self.setStyleSheet("QCheckBox::indicator { width: 0px; height: 0px; }")
 
-    @property
+    # Must be a Qt property (not a plain Python property) for QPropertyAnimation
+    @pyqtProperty(float)
     def circle_position(self):
         return self._circle_position
 

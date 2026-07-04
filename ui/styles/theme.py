@@ -56,8 +56,8 @@ class Theme:
     BORDER_RADIUS = 16
 
     # Window settings
-    WINDOW_MIN_WIDTH = 1400
-    WINDOW_MIN_HEIGHT = 900
+    WINDOW_MIN_WIDTH = 1100
+    WINDOW_MIN_HEIGHT = 780
 
     # Fonts
     FONT_TITLE = "SF Pro Display, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"

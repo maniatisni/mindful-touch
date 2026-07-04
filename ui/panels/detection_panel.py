@@ -10,6 +10,14 @@ from backend.detection.config import Config
 from ui.styles.theme import Theme
 from ui.widgets.toggle_switch import LabeledToggle
 
+REGION_DESCRIPTIONS = {
+    "scalp": "Head & hair touching",
+    "eyebrows": "Forehead & brow rubbing",
+    "eyes": "Eye rubbing & touching",
+    "mouth": "Lip & mouth touching",
+    "beard": "Chin & jaw area",
+}
+
 
 class DetectionRegionsCard(QWidget):
     """Card for region toggle controls"""
@@ -32,14 +40,33 @@ class DetectionRegionsCard(QWidget):
         title.setStyleSheet(Theme.section_title_style())
         layout.addWidget(title)
 
-        # Region toggles
+        # Region toggles with descriptions, grouped so each pair stays tight
         for region in Config.AVAILABLE_REGIONS:
             toggle = LabeledToggle(region.title())
             toggle.setChecked(region in Config.ACTIVE_REGIONS)
             toggle.toggled.connect(lambda checked, r=region: self.region_toggled.emit(r, checked))
-
             self.region_toggles[region] = toggle
-            layout.addWidget(toggle)
+
+            row_layout = QVBoxLayout()
+            row_layout.setContentsMargins(0, 0, 0, 0)
+            row_layout.setSpacing(2)
+            row_layout.addWidget(toggle)
+
+            description = REGION_DESCRIPTIONS.get(region)
+            if description:
+                desc_label = QLabel(description)
+                desc_label.setStyleSheet(f"""
+                    QLabel {{
+                        font-family: {Theme.FONT_BODY};
+                        font-size: 11px;
+                        color: {Theme.TEXT_MUTED};
+                        border: none;
+                        background: transparent;
+                    }}
+                """)
+                row_layout.addWidget(desc_label)
+
+            layout.addLayout(row_layout)
 
     def update_region_state(self, region, active):
         """Update toggle state (for external changes)"""

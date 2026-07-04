@@ -26,8 +26,8 @@ class Config:
     # Available regions (can be enabled/disabled)
     AVAILABLE_REGIONS = ["scalp", "eyebrows", "eyes", "mouth", "beard"]
 
-    # Currently active regions
-    ACTIVE_REGIONS = ["scalp"]  # Start with scalp only
+    # Currently active regions (overridden at startup by persisted user settings)
+    ACTIVE_REGIONS = ["scalp", "eyebrows", "eyes", "mouth", "beard"]
 
     # Region-specific settings
     REGION_SETTINGS = {

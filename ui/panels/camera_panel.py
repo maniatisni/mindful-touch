@@ -3,7 +3,7 @@ Camera Panel - Right side display
 Live detection feed and activity stats
 """
 
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from PyQt6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
 from ui.styles.theme import Theme
@@ -36,7 +36,7 @@ class LiveDetectionCard(QWidget):
         # Camera display - no container wrapper to avoid clipping
         self.camera_label = QLabel()
         self.camera_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.camera_label.setMinimumSize(720, 540)
+        self.camera_label.setMinimumSize(480, 360)
         self.camera_label.setStyleSheet(f"""
             QLabel {{
                 background-color: rgba(255, 255, 255, 0.05);
@@ -75,7 +75,9 @@ class LiveDetectionCard(QWidget):
 
     def _set_default_message(self):
         """Set default camera message"""
-        self.camera_label.setText("📷 Camera Preview\n\nClick 'Start Detection' to begin\nmonitoring facial touch patterns")
+        self.camera_label.setText(
+            "Camera Preview\n\nPress  Start Detection  to begin.\n\nPosition yourself so your face\nis clearly visible in the frame."
+        )
 
     def _on_detection_button_clicked(self):
         """Handle detection button click"""
@@ -190,17 +192,7 @@ class ActivityCard(QWidget):
         # Value (big number)
         value_label = QLabel(value)
         value_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        value_label.setStyleSheet(f"""
-            QLabel {{
-                font-family: {Theme.FONT_TITLE};
-                font-size: 36px;
-                font-weight: 700;
-                color: {color};
-                margin: 0;
-                border: none;
-                background: transparent;
-            }}
-        """)
+        value_label.setStyleSheet(self._stat_value_style(color))
 
         # Label (small text)
         text_label = QLabel(label)
@@ -245,6 +237,30 @@ class ActivityCard(QWidget):
     def update_mindful_stops(self, count):
         """Update mindful stops counter (placeholder)"""
         self.stops_widget.value_label.setText(str(count))
+
+    @staticmethod
+    def _stat_value_style(color):
+        """Stylesheet for the big stat number"""
+        return f"""
+            QLabel {{
+                font-family: {Theme.FONT_TITLE};
+                font-size: 36px;
+                font-weight: 700;
+                color: {color};
+                margin: 0;
+                border: none;
+                background: transparent;
+            }}
+        """
+
+    def show_mindful_stop_flash(self):
+        """Briefly highlight the mindful stops stat in green"""
+        self.stops_widget.value_label.setStyleSheet(self._stat_value_style(Theme.SUCCESS_600))
+        QTimer.singleShot(1500, self._reset_stops_color)
+
+    def _reset_stops_color(self):
+        """Restore the mindful stops stat to its normal color"""
+        self.stops_widget.value_label.setStyleSheet(self._stat_value_style(Theme.PRIMARY_600))
 
 
 class CameraPanel(QWidget):
@@ -294,3 +310,7 @@ class CameraPanel(QWidget):
         self.activity_card.update_detections(detections)
         self.activity_card.update_session_time(session_minutes)
         self.activity_card.update_mindful_stops(mindful_stops)
+
+    def show_mindful_stop_flash(self):
+        """Briefly highlight the mindful stops stat"""
+        self.activity_card.show_mindful_stop_flash()

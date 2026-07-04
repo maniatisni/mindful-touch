@@ -63,8 +63,9 @@ jobs:
               import numpy as np
               from backend.detection.config import Config
               from backend.detection.multi_region_detector import MultiRegionDetector
-              from ui.status_overlay import StatusOverlay
-              from ui.settings_panel import SettingsPanel
+              from ui.panels.detection_panel import DetectionPanel
+              from ui.panels.camera_panel import CameraPanel
+              from ui.styles.theme import Theme
               print('✅ All imports successful')
               print('✅ PyQt6 app components can be imported')
           except Exception as e:

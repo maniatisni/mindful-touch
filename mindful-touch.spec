@@ -1,5 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+import glob
 import sys
 from pathlib import Path
 
@@ -9,21 +10,27 @@ block_cipher = None
 spec_path = Path(SPECPATH)
 sys.path.insert(0, str(spec_path))
 
+# Locate MediaPipe in the venv regardless of Python minor version
+mediapipe_matches = glob.glob(str(spec_path / '.venv/lib/python3.*/site-packages/mediapipe'))
+if not mediapipe_matches:
+    raise SystemExit('Could not find mediapipe in .venv — run `uv sync` first')
+mediapipe_site = mediapipe_matches[0]
+
+datas = [
+    # Include MediaPipe model files
+    (f'{mediapipe_site}/modules', 'mediapipe/modules'),
+    (f'{mediapipe_site}/python/solutions', 'mediapipe/python/solutions'),
+]
+
 a = Analysis(
     ['main.py'],
     pathex=[str(spec_path)],
     binaries=[],
-    datas=[
-        # Include system sounds for alerts
-        ('/System/Library/Sounds/Glass.aiff', 'sounds'),
-        # Include MediaPipe model files
-        ('.venv/lib/python3.9/site-packages/mediapipe/modules', 'mediapipe/modules'),
-        ('.venv/lib/python3.9/site-packages/mediapipe/python/solutions', 'mediapipe/python/solutions'),
-    ],
+    datas=datas,
     hiddenimports=[
         # PyQt6 modules
         'PyQt6.QtCore',
-        'PyQt6.QtGui', 
+        'PyQt6.QtGui',
         'PyQt6.QtWidgets',
         # MediaPipe dependencies
         'mediapipe',
@@ -32,9 +39,13 @@ a = Analysis(
         # Backend modules
         'backend.detection.multi_region_detector',
         'backend.detection.config',
-        # UI modules  
-        'ui.status_overlay',
-        'ui.settings_panel',
+        'backend.detection.settings_store',
+        # UI modules
+        'ui.panels.camera_panel',
+        'ui.panels.detection_panel',
+        'ui.styles.theme',
+        'ui.widgets.status_badge',
+        'ui.widgets.toggle_switch',
     ],
     hookspath=[],
     hooksconfig={},
@@ -71,13 +82,13 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=None,
+    icon='logo.icns',
 )
 
 app = BUNDLE(
     exe,
     name='Mindful Touch.app',
-    icon=None,
+    icon='logo.icns',
     bundle_identifier='com.mindfultouch.app',
     info_plist={
         'CFBundleName': 'Mindful Touch',

@@ -28,9 +28,6 @@ jobs:
       - name: Install Python dependencies
         run: uv sync
 
-      - name: Install PyInstaller
-        run: uv add pyinstaller
-
       - name: Build PyQt6 standalone app
         run: |
           uv run pyinstaller mindful-touch.spec --clean --noconfirm
